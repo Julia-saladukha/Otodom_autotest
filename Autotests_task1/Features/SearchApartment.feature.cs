@@ -27,8 +27,8 @@ namespace Autotests_task1.Features
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Search apartments on Otodom", "  As a user\r\n  I want to search for apartments\r\n  So that I can verify filters an" +
-                "d offer details", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Search apartments on Otodom", "  As a user\r\n  I want to open the site and authorize\r\n  So that I can verify acce" +
+                "ss to my account", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
 #line 1 "SearchApartment.feature"
 #line hidden
@@ -108,61 +108,41 @@ namespace Autotests_task1.Features
         {
             return new global::Io.Cucumber.Messages.Types.Source("Features/SearchApartment.feature", @"Feature: Search apartments on Otodom
   As a user
-  I want to search for apartments
-  So that I can verify filters and offer details
+  I want to open the site and authorize
+  So that I can verify access to my account
 
-  Scenario: Verify search filters and offer details
+  Scenario: Open main page and authorize user
     Given I open Otodom main page
     And I accept cookies if popup appears
     When I authorize user
-    And I set location and price filters and search
-    Then Search results should display apartments with price in selected range
-    When I clear price filter and set surface range from first page
-    Then Search results should display apartments with surface in selected range
-    When I open random offer and save its details
-    Then Offer details should match saved values
+    Then Main page should be opened
 ", global::Io.Cucumber.Messages.Types.SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN);
         }
         
         private static global::Io.Cucumber.Messages.Types.GherkinDocument GherkinDocumentFunc()
         {
-            return new global::Io.Cucumber.Messages.Types.GherkinDocument("Features/SearchApartment.feature", new global::Io.Cucumber.Messages.Types.Feature(new global::Io.Cucumber.Messages.Types.Location(1, new System.Nullable<long>(1)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "en-US", "Feature", "Search apartments on Otodom", "  As a user\r\n  I want to search for apartments\r\n  So that I can verify filters an" +
-                        "d offer details", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.FeatureChild>(new global::Io.Cucumber.Messages.Types.FeatureChild[] {
-                                new global::Io.Cucumber.Messages.Types.FeatureChild(null, null, new global::Io.Cucumber.Messages.Types.Scenario(new global::Io.Cucumber.Messages.Types.Location(6, new System.Nullable<long>(3)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "Scenario", "Verify search filters and offer details", "", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Step>(new global::Io.Cucumber.Messages.Types.Step[] {
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(7, new System.Nullable<long>(5)), "Given ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONTEXT, "I open Otodom main page", null, null, "ce800feef12fcb56814610ddf8115172"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(8, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I accept cookies if popup appears", null, null, "b734eaf8045a785facc39e59b1d3ce75"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(9, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I authorize user", null, null, "aad52de29c507357b13dd22e7e930606"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(10, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I set location and price filters and search", null, null, "2fcdff46d781505daff47214c541b4dd"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(11, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "Search results should display apartments with price in selected range", null, null, "eb82f41895f18a57a2a5e24e2132edc0"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(12, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I clear price filter and set surface range from first page", null, null, "b25d568d7153645e8bae17d2bb33d96f"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(13, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "Search results should display apartments with surface in selected range", null, null, "b2cb5f4962217754a04b81cfdd89825f"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(14, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I open random offer and save its details", null, null, "cc9597d12312f35ba5c8f003df7096f4"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(15, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "Offer details should match saved values", null, null, "a9be86b6100a7a5c8085ad4c6821796c")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Examples>(new global::Io.Cucumber.Messages.Types.Examples[0]), "84d00d701f63d25895b59168953bf928"))})), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Comment>(new global::Io.Cucumber.Messages.Types.Comment[0]));
+            return new global::Io.Cucumber.Messages.Types.GherkinDocument("Features/SearchApartment.feature", new global::Io.Cucumber.Messages.Types.Feature(new global::Io.Cucumber.Messages.Types.Location(1, new System.Nullable<long>(1)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "en-US", "Feature", "Search apartments on Otodom", "  As a user\r\n  I want to open the site and authorize\r\n  So that I can verify acce" +
+                        "ss to my account", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.FeatureChild>(new global::Io.Cucumber.Messages.Types.FeatureChild[] {
+                                new global::Io.Cucumber.Messages.Types.FeatureChild(null, null, new global::Io.Cucumber.Messages.Types.Scenario(new global::Io.Cucumber.Messages.Types.Location(6, new System.Nullable<long>(3)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "Scenario", "Open main page and authorize user", "", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Step>(new global::Io.Cucumber.Messages.Types.Step[] {
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(7, new System.Nullable<long>(5)), "Given ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONTEXT, "I open Otodom main page", null, null, "77166bdbf7371459b7707e919c78e553"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(8, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I accept cookies if popup appears", null, null, "1cda507ebbc7165787783410e4c06009"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(9, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I authorize user", null, null, "b1ba8213b5dd4b589d78c67b6e2d080a"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(10, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "Main page should be opened", null, null, "0e625c09f49aa458a7d30224c0ac0052")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Examples>(new global::Io.Cucumber.Messages.Types.Examples[0]), "7444e06d5045f259b458f91c67055d86"))})), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Comment>(new global::Io.Cucumber.Messages.Types.Comment[0]));
         }
         
         private static global::System.Collections.Generic.IEnumerable<Io.Cucumber.Messages.Types.Pickle> PicklesFunc()
         {
             return new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Pickle>(new global::Io.Cucumber.Messages.Types.Pickle[] {
-                        new global::Io.Cucumber.Messages.Types.Pickle("e070428d64ebf55b9e1803e535e31b1b", "Features/SearchApartment.feature", "Verify search filters and offer details", "en-US", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleStep>(new global::Io.Cucumber.Messages.Types.PickleStep[] {
+                        new global::Io.Cucumber.Messages.Types.Pickle("6ed38553c8689a59bdc7b96d78731a04", "Features/SearchApartment.feature", "Open main page and authorize user", "en-US", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleStep>(new global::Io.Cucumber.Messages.Types.PickleStep[] {
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "ce800feef12fcb56814610ddf8115172"}), "faf184cb90eef15fbf853005cceaf758", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I open Otodom main page"),
+                                                        "77166bdbf7371459b7707e919c78e553"}), "b3fb4b8f9f9e53599468f28956de3e22", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I open Otodom main page"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "b734eaf8045a785facc39e59b1d3ce75"}), "a1edf40a423649588c3e18655018c9e2", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I accept cookies if popup appears"),
+                                                        "1cda507ebbc7165787783410e4c06009"}), "fa26bef272539255b12d52b4a0b4eecd", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I accept cookies if popup appears"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "aad52de29c507357b13dd22e7e930606"}), "2e34a9f59ceeee5f9b3eb9ffc1fbf5db", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I authorize user"),
+                                                        "b1ba8213b5dd4b589d78c67b6e2d080a"}), "84158e6aa8ca5554885e5bf1f960de55", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I authorize user"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "2fcdff46d781505daff47214c541b4dd"}), "5c988712c560b05e84f7f8124753613c", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I set location and price filters and search"),
-                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "eb82f41895f18a57a2a5e24e2132edc0"}), "d5132706cb4392508dc363822ea86f3b", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "Search results should display apartments with price in selected range"),
-                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "b25d568d7153645e8bae17d2bb33d96f"}), "d5ff20b742b6825cb405b23a7ce8df6d", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I clear price filter and set surface range from first page"),
-                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "b2cb5f4962217754a04b81cfdd89825f"}), "8f29a46711ef11569cc51a53845002a3", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "Search results should display apartments with surface in selected range"),
-                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "cc9597d12312f35ba5c8f003df7096f4"}), "29f64f713f22765ba5dcbf20385445de", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I open random offer and save its details"),
-                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "a9be86b6100a7a5c8085ad4c6821796c"}), "12cdfa14570a585ebab502cbd109599c", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "Offer details should match saved values")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleTag>(new global::Io.Cucumber.Messages.Types.PickleTag[0]), new System.Collections.Generic.List<string>(new string[] {
-                                        "84d00d701f63d25895b59168953bf928"}))});
+                                                        "0e625c09f49aa458a7d30224c0ac0052"}), "51f11d75d3d2465f9645bf834a4373cb", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "Main page should be opened")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleTag>(new global::Io.Cucumber.Messages.Types.PickleTag[0]), new System.Collections.Generic.List<string>(new string[] {
+                                        "7444e06d5045f259b458f91c67055d86"}))});
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
@@ -171,13 +151,13 @@ namespace Autotests_task1.Features
         }
         
         [global::NUnit.Framework.TestAttribute()]
-        [global::NUnit.Framework.DescriptionAttribute("Verify search filters and offer details")]
-        public async global::System.Threading.Tasks.Task VerifySearchFiltersAndOfferDetails()
+        [global::NUnit.Framework.DescriptionAttribute("Open main page and authorize user")]
+        public async global::System.Threading.Tasks.Task OpenMainPageAndAuthorizeUser()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "0";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Verify search filters and offer details", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Open main page and authorize user", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 6
@@ -200,22 +180,7 @@ namespace Autotests_task1.Features
     await testRunner.WhenAsync("I authorize user", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 10
-    await testRunner.AndAsync("I set location and price filters and search", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
-#line hidden
-#line 11
-    await testRunner.ThenAsync("Search results should display apartments with price in selected range", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 12
-    await testRunner.WhenAsync("I clear price filter and set surface range from first page", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 13
-    await testRunner.ThenAsync("Search results should display apartments with surface in selected range", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
-#line hidden
-#line 14
-    await testRunner.WhenAsync("I open random offer and save its details", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
-#line hidden
-#line 15
-    await testRunner.ThenAsync("Offer details should match saved values", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("Main page should be opened", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

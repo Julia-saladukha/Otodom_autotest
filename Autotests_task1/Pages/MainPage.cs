@@ -82,10 +82,7 @@ public class MainPage : BasePage
         By.CssSelector("button[data-cy='homepage.search.submit.button']"),
         By.CssSelector("button[data-testid='search-button']"),
         By.CssSelector("form button[type='submit']"),
-        By.XPath("//button[contains(.,'Szukaj') or contains(.,'Search')]"),
-        By.XPath("//button[contains(@class,'search') or contains(@id,'search')]"),
-        By.CssSelector("button[class*='search']"),
-        By.CssSelector("[role='button'][class*='search']")
+        By.XPath("//button[contains(.,'Szukaj') or contains(.,'Search')]")
     };
 
     private readonly IReadOnlyCollection<By> _loginLocators = new List<By>
@@ -188,58 +185,43 @@ public class MainPage : BasePage
     #region Filters
     public bool SetLocation(string location)
     {
-        var driver = AqualityServices.Browser.Driver;
         Logger.Info($"Setting location: {location}");
-        IWebElement? input = null;
+        var driver = AqualityServices.Browser.Driver;
+        var mainLocator = By.CssSelector("input[data-cy='search.form.location.button']");
         try
         {
-            input = driver.FindElements(By.CssSelector("input[data-cy='search.form.location.button']"))
-                .FirstOrDefault(e => e.Displayed && e.Enabled);
+            Logger.Info("Locating location input by primary locator");
+            var input = driver.FindElements(mainLocator).FirstOrDefault(e => e.Displayed && e.Enabled);
             if (input == null)
             {
-                Logger.Warn("Location input with required data-cy attribute not found. Trying fallback selectors.");
-                input = TryFindFirstDisplayed(driver, _locationLocators);
-            }
-            
-            if (input == null)
-            {
-                Logger.Error("No location input found with any selector");
+                Logger.Warn("Primary location input not found, aborting (per specification no fallbacks used here)");
                 return false;
             }
-            
-            if (!string.IsNullOrEmpty(input.GetAttribute("value")))
-            {
-                input.Clear();
-            }
+
+            Logger.Info("Clearing location input");
+            try { input.Clear(); } catch { ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].value='';", input); }
+
+            Logger.Info($"Typing location value: {location}");
             input.SendKeys(location);
-            
-            // Wait for suggestion dropdown/listbox - with timeout handling
-            var suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
-            {
-                try
-                {
-                    return driver.FindElements(By.CssSelector("[role='listbox']")).Any(lb => lb.Displayed) ||
-                           driver.FindElements(By.CssSelector("[role='option']")).Any(opt => opt.Displayed) ||
-                           driver.FindElements(By.XPath("//li[contains(@id,'react-select') or contains(@class,'option')]")).Any(el => el.Displayed);
-                }
-                catch { return false; }
-            }, timeout: TimeSpan.FromSeconds(3)); // Reduced timeout
-            
-            Logger.Debug($"Suggestion dropdown appeared: {suggestionAppeared}");
+
+            Logger.Info("Sending ENTER to select first suggestion");
             input.SendKeys(Keys.Enter);
-            
-            // Best-effort confirmation that chosen value applied
-            Thread.Sleep(1000); // Give time for value to update
+
+            Logger.Info("Waiting briefly for suggestion to apply");
+            Thread.Sleep(800); // brief wait to allow selection to register
+
+            // Optional: verify the value stuck
+            var currentValue = input.GetAttribute("value") ?? string.Empty;
+            Logger.Info($"Location input current value after ENTER: '{currentValue}'");
             return true;
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to set location using explicit method");
+            Logger.Warn(ex, "Failed to set location");
             return false;
         }
     }
 
-    public bool SetLocationWithEnter(string location) => SetLocation(location);
     public bool SetLocationToWarszawa() => SetLocation("Warszawa");
 
     public bool SetPriceRange(int min, int max)
@@ -322,12 +304,10 @@ public class MainPage : BasePage
         {
             // Wait a moment for any dynamic content
             Thread.Sleep(1000);
-            
             var btn = driver.FindElements(By.Id("search-form-submit")).FirstOrDefault(e => e.Displayed && e.Enabled);
             if (btn == null)
             {
                 Logger.Warn("Search button with id 'search-form-submit' not found or not enabled.");
-                // Log what search buttons ARE available
                 var searchButtons = driver.FindElements(By.XPath("//button[contains(@id,'search') or contains(@class,'search') or contains(.,'Szukaj')]"));
                 Logger.Info($"Found {searchButtons.Count} potential search buttons:");
                 foreach (var searchBtn in searchButtons.Take(5))

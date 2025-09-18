@@ -47,6 +47,7 @@ public class ReqnrollHooks
             if (!AqualityServices.IsBrowserStarted) return;
             var page = new MainPage();
             page.HandlePopupsIfPresent();
+            Logger.Info("Checked for popups before step");
         }
         catch (Exception ex)
         {

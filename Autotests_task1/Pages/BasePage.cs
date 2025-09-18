@@ -13,7 +13,7 @@ public abstract class BasePage : Form
 
     private readonly By _cookieAcceptButton = By.Id("onetrust-accept-btn-handler");
 
-    // Extended set of possible survey/marketing/overlay close buttons.
+    // Extended set of possible survey/marketing/overlay close buttons (pre-universal version).
     private static readonly By[] SurveyCloseSelectors = new[]
     {
         By.CssSelector("[aria-label='Close']"),
@@ -22,7 +22,14 @@ public abstract class BasePage : Form
         By.CssSelector("button[data-testid='close-button']"),
         By.CssSelector("button[class*='close']"),
         By.CssSelector("[class*='close'][role='button']"),
-        By.XPath("//button[contains(translate(.,'ZAMKNIJ','zamknij'),'zamknij') or contains(translate(.,'CLOSE','close'),'close')]")
+        By.XPath("//button[contains(translate(.,'ZAMKNIJ','zamknij'),'zamknij') or contains(translate(.,'CLOSE','close'),'close')]") ,
+        // Explicit selectors
+        By.CssSelector(".modal-close"),
+        By.CssSelector("button.modal-close"),
+        By.CssSelector(".close-btn"),
+        By.CssSelector("button.close-btn"),
+        By.CssSelector(".n-icon--close"),
+        By.CssSelector("button.n-icon--close")
     };
 
     public void CloseCookieIfPresent()
@@ -38,6 +45,7 @@ public abstract class BasePage : Form
                 try
                 {
                     btn.Click();
+                    Logger.Info("Cookie consent accepted.");
                 }
                 catch (Exception ex)
                 {
@@ -45,6 +53,7 @@ public abstract class BasePage : Form
                     try
                     {
                         ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", btn);
+                        Logger.Info("Cookie consent accepted via JS click.");
                     }
                     catch (Exception jsEx)
                     {
@@ -76,6 +85,7 @@ public abstract class BasePage : Form
                     try
                     {
                         closeBtn.Click();
+                        Logger.Info($"Closed popup via selector: {by}");
                     }
                     catch (Exception ex)
                     {
@@ -83,14 +93,14 @@ public abstract class BasePage : Form
                         try
                         {
                             ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", closeBtn);
+                            Logger.Info($"Closed popup via JS using selector: {by}");
                         }
                         catch (Exception jsEx)
                         {
                             Logger.Error(jsEx, "Failed to close survey popup via JS");
                         }
                     }
-                    // Stop after first successful close attempt
-                    break;
+                    // Continue to attempt closing additional popups if present.
                 }
                 catch (StaleElementReferenceException)
                 {
