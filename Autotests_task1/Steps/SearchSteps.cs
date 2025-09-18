@@ -32,44 +32,19 @@ public class SearchSteps
     [When("I set location and price filters and search")]
     public void WhenISetLocationAndPriceFiltersAndSearch()
     {
-        Logger.Info("Setting location and price filters then searching");
-        _mainPage.SetLocationWithEnter(_location); // ensure suggestion accepted
-        _mainPage.SetPriceRange(_minPrice, _maxPrice);
+        Logger.Info("Setting location and price filters then searching (updated flow)");
+        _mainPage.SetLocationToWarszawa().Should().BeTrue("Location should be set to Warszawa");
+        _mainPage.SetPriceRange(_minPrice, _maxPrice).Should().BeTrue("Price range should be set");
         ScenarioContextHelper.Set(_scenarioContext, PriceRangeKey, (_minPrice, _maxPrice));
 
-        // Single search attempt with longer wait
-        Logger.Info("Attempting to click search button");
-        var clicked = _mainPage.Search();
-        clicked.Should().BeTrue("Search button should be clickable");
+        Logger.Info("Clicking search button using new ClickSearchButton method");
+        _mainPage.ClickSearchButton().Should().BeTrue("Search button should be clicked");
 
-        // Wait for navigation to results page
-        var navSucceeded = AqualityServices.ConditionalWait.WaitFor(() =>
-        {
-            try
-            {
-                var url = AqualityServices.Browser.CurrentUrl;
-                return url.Contains("/pl/") || url.Contains("search") || url.Contains("oferty");
-            }
-            catch
-            {
-                return false;
-            }
-        }, timeout: TimeSpan.FromSeconds(15));
+        // Wait explicitly for results using new helper
+        _resultsPage.WaitForResultsToLoad(TimeSpan.FromSeconds(30)).Should().BeTrue("Results should load after clicking search");
 
-        if (navSucceeded)
-        {
-            Logger.Info("Navigation succeeded, waiting for listings to load");
-            var listingsLoaded = _resultsPage.WaitForListings(TimeSpan.FromSeconds(20));
-            listingsLoaded.Should().BeTrue("Listings should load after search");
-
-            var priceDataLoaded = _resultsPage.WaitForPriceData(TimeSpan.FromSeconds(15));
-            priceDataLoaded.Should().BeTrue("Price data should load for validation");
-        }
-        else
-        {
-            Logger.Warn("Navigation did not succeed within timeout");
-            navSucceeded.Should().BeTrue("Should navigate to results page after search");
-        }
+        // Optional: ensure some price data is present before proceeding
+        _resultsPage.WaitForPriceData(TimeSpan.FromSeconds(15)).Should().BeTrue("Price data should load for validation");
     }
 
     [Then("Search results should display apartments with price in selected range")]
