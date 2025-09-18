@@ -3,6 +3,7 @@ using Aquality.Selenium.Elements;
 using Aquality.Selenium.Elements.Interfaces;
 using NLog;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Support.UI;
 
 namespace Autotests_task1.Pages;
 
@@ -12,6 +13,7 @@ public class MainPage : BasePage
 
     private const string SiteUrl = "https://www.otodom.pl/";
     private static readonly TimeSpan DefaultUiWait = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(3);
 
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }
 
@@ -23,12 +25,10 @@ public class MainPage : BasePage
     private readonly IReadOnlyCollection<By> _locationLocators = new List<By>
     {
         By.CssSelector("input[data-cy='search.form.location.button']"),
+        By.CssSelector("input[placeholder='Wpisz lokalizacj?']"),
+        By.CssSelector("input[placeholder*='lokalizac']"),
         By.CssSelector("input[name='location']"),
-        By.CssSelector("input[placeholder*='Lokal']"),
-        By.CssSelector("input[placeholder*='lokal']"),
-        By.CssSelector("input[placeholder*='Miejsc']"),
-        By.CssSelector("input[aria-label*='Lokal']"),
-        By.XPath("//input[contains(translate(@placeholder,'LOKALM','lokalm'),'lokal') or contains(translate(@placeholder,'MIEJSC','miejsc'),'miejsc')]")
+        By.CssSelector("input[aria-label*='Lokal']")
     };
 
     private readonly IReadOnlyCollection<By> _priceMinLocatorsLegacy = new List<By>
@@ -48,6 +48,7 @@ public class MainPage : BasePage
     // Explicit selectors requested in task description - Enhanced with more options
     private readonly IReadOnlyCollection<By> _priceMinLocators = new List<By>
     {
+        By.CssSelector("input[data-cy='search.form.price.from']"),
         By.Id("priceFrom"),
         By.CssSelector("input[name*='priceFrom']"),
         By.CssSelector("input[name*='price_from']"),
@@ -61,6 +62,7 @@ public class MainPage : BasePage
 
     private readonly IReadOnlyCollection<By> _priceMaxLocators = new List<By>
     {
+        By.CssSelector("input[data-cy='search.form.price.to']"),
         By.Id("priceTo"),
         By.CssSelector("input[name*='priceTo']"),
         By.CssSelector("input[name*='price_to']"),
@@ -122,26 +124,19 @@ public class MainPage : BasePage
                     return element;
                 }
             }
-            catch (StaleElementReferenceException)
-            {
-                Logger.Debug($"Stale element with locator: {by}");
-            }
-            catch (NoSuchElementException)
-            {
-                Logger.Debug($"No element found with locator: {by}");
-            }
+            catch (Exception ex) when (ex is StaleElementReferenceException or NoSuchElementException) { }
         }
         return null;
     }
 
     private static bool SafeClick(IWebDriver driver, IWebElement element)
     {
-        try 
-        { 
+        try
+        {
             if (element.Displayed && element.Enabled)
             {
-                element.Click(); 
-                return true; 
+                element.Click();
+                return true;
             }
             return false;
         }
@@ -150,7 +145,7 @@ public class MainPage : BasePage
             try
             {
                 Logger.Debug(ex, "Standard click failed, trying JS click");
-                if (element.Displayed) // Check if element still exists
+                if (element.Displayed)
                 {
                     ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", element);
                     return true;
@@ -162,6 +157,137 @@ public class MainPage : BasePage
                 Logger.Warn(jsEx, "JS click also failed");
                 return false;
             }
+        }
+    }
+
+    private static bool IsInteractable(IWebElement element)
+    {
+        try
+        {
+            return element.Displayed && element.Enabled && element.Size.Height > 0 && element.Size.Width > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private IWebElement? FindLocationInput()
+    {
+        var driver = AqualityServices.Browser.Driver;
+        foreach (var by in _locationLocators)
+        {
+            var el = driver.FindElements(by).FirstOrDefault(e => e.Displayed);
+            if (el != null) return el;
+        }
+        return null;
+    }
+
+    private IWebElement? FindLocationInputWithRetry()
+    {
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                Logger.Debug($"Finding location input attempt {attempt}/3");
+                var el = FindLocationInput();
+                if (el != null && IsInteractable(el)) return el;
+                Thread.Sleep(400);
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, $"Location input attempt {attempt} failed");
+            }
+        }
+        return null;
+    }
+
+    private bool TryDirectLocationInput(IWebElement input, string value)
+    {
+        var driver = AqualityServices.Browser.Driver;
+        try
+        {
+            ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block:'center'});", input);
+            Thread.Sleep(150);
+            if (!IsInteractable(input)) return false;
+            input.Click();
+            Thread.Sleep(100);
+            try { input.Clear(); } catch { ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].value='';", input); }
+            Thread.Sleep(50);
+            input.SendKeys(value);
+            Logger.Info($"Typed location value '{value}' into input");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Direct location input failed");
+            return false;
+        }
+    }
+
+    private bool TryJsSetLocation(string value)
+    {
+        try
+        {
+            var driver = AqualityServices.Browser.Driver;
+            var script = @"try { var cands=[document.querySelector(""input[data-cy='search.form.location.button']""),document.querySelector(""input[placeholder='Wpisz lokalizacj?']""),document.querySelector(""input[placeholder*='lokalizac']"")]; for (var i=0;i<cands.length;i++){var el=cands[i]; if(el&&el.offsetParent!==null){el.focus(); el.value=''; el.value=arguments[0]; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return true;}} return false;} catch(e){return false;}";
+            var success = (bool)((IJavaScriptExecutor)driver).ExecuteScript(script, value);
+            if (success) Logger.Info($"Location value set via JS: '{value}'");
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "JS location set failed");
+            return false;
+        }
+    }
+
+    private bool SelectLocationSuggestion(string location)
+    {
+        var driver = AqualityServices.Browser.Driver;
+        try
+        {
+            var wait = new WebDriverWait(driver, ShortWait);
+            var suggestion = wait.Until(d =>
+            {
+                var items = d.FindElements(By.XPath($"//p[.//mark[translate(normalize-space(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')='{location.ToLower()}']]//ancestor::div[contains(@class,'e1bqfjd82') or contains(@class,'css-')]" +
+                    $"|//li[contains(@class,'suggestion')][.//strong[contains(.,'{location}')]]"));
+                return items.FirstOrDefault(i => i.Displayed);
+            });
+            if (suggestion != null)
+            {
+                Logger.Info("Clicking location suggestion");
+                suggestion.Click();
+                Thread.Sleep(300);
+                return true;
+            }
+        }
+        catch (WebDriverTimeoutException)
+        {
+            Logger.Debug("Location suggestion timeout");
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Suggestion selection failed");
+        }
+        return false;
+    }
+
+    private bool KeyboardFallback(IWebElement input)
+    {
+        try
+        {
+            input.SendKeys(Keys.ArrowDown);
+            Thread.Sleep(200);
+            input.SendKeys(Keys.Enter);
+            Thread.Sleep(300);
+            Logger.Info("Used keyboard fallback for location suggestion");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Keyboard fallback failed");
+            return false;
         }
     }
     #endregion
@@ -187,39 +313,51 @@ public class MainPage : BasePage
     {
         Logger.Info($"Setting location: {location}");
         var driver = AqualityServices.Browser.Driver;
-        var mainLocator = By.CssSelector("input[data-cy='search.form.location.button']");
-        try
+        IWebElement? input = FindLocationInputWithRetry();
+        if (input == null)
         {
-            Logger.Info("Locating location input by primary locator");
-            var input = driver.FindElements(mainLocator).FirstOrDefault(e => e.Displayed && e.Enabled);
-            if (input == null)
+            Logger.Error("Location input field not found");
+            return false;
+        }
+
+        // 1. Try direct interaction
+        if (!TryDirectLocationInput(input, location))
+        {
+            Logger.Warn("Direct location typing failed, trying JS method");
+            if (!TryJsSetLocation(location))
             {
-                Logger.Warn("Primary location input not found, aborting (per specification no fallbacks used here)");
+                Logger.Error("Failed to set location via any method");
                 return false;
             }
+            // Refresh reference after JS
+            input = FindLocationInput();
+            if (input == null)
+            {
+                Logger.Warn("Location input disappeared after JS interaction");
+            }
+        }
 
-            Logger.Info("Clearing location input");
-            try { input.Clear(); } catch { ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].value='';", input); }
+        // 2. Attempt to pick suggestion
+        var suggestionPicked = SelectLocationSuggestion(location);
+        if (!suggestionPicked && input != null)
+        {
+            Logger.Warn("Suggestion click failed, trying keyboard fallback");
+            KeyboardFallback(input);
+        }
 
-            Logger.Info($"Typing location value: {location}");
-            input.SendKeys(location);
-
-            Logger.Info("Sending ENTER to select first suggestion");
-            input.SendKeys(Keys.Enter);
-
-            Logger.Info("Waiting briefly for suggestion to apply");
-            Thread.Sleep(800); // brief wait to allow selection to register
-
-            // Optional: verify the value stuck
-            var currentValue = input.GetAttribute("value") ?? string.Empty;
-            Logger.Info($"Location input current value after ENTER: '{currentValue}'");
-            return true;
+        // 3. Verify value or at least presence of typed text
+        try
+        {
+            var finalInput = FindLocationInput();
+            var finalValue = finalInput?.GetAttribute("value") ?? string.Empty;
+            Logger.Info($"Final location input value: '{finalValue}' (suggestionPicked={suggestionPicked})");
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to set location");
-            return false;
+            Logger.Debug(ex, "Location verification failed");
         }
+
+        return true; // Best-effort; search will validate further
     }
 
     public bool SetLocationToWarszawa() => SetLocation("Warszawa");
@@ -231,7 +369,7 @@ public class MainPage : BasePage
         var maxBox = TryFindFirstDisplayed(driver, _priceMaxLocators) ?? TryFindFirstDisplayed(driver, _priceMaxLocatorsLegacy);
         if (minBox == null || maxBox == null)
         {
-            Logger.Warn($"Price range inputs not found. MinBox: {minBox != null}, MaxBox: {maxBox != null}");
+            Logger.Error("Price range input fields not found");
             return false;
         }
         Logger.Info($"Setting price range: {min} - {max}");
@@ -241,7 +379,7 @@ public class MainPage : BasePage
             minBox.SendKeys(min.ToString());
             maxBox.Clear();
             maxBox.SendKeys(max.ToString());
-            Thread.Sleep(500); // Allow form to process input
+            Thread.Sleep(300);
             return true;
         }
         catch (Exception ex)
@@ -264,36 +402,14 @@ public class MainPage : BasePage
     public bool ClickSearch()
     {
         var driver = AqualityServices.Browser.Driver;
-        Thread.Sleep(1000); // allow UI settle
+        Thread.Sleep(500); // allow UI settle
         var btn = TryFindFirstDisplayed(driver, _searchButtonLocators);
         if (btn == null)
         {
-            Logger.Error("Search button not found using provided locators. Logging available buttons:");
-            try
-            {
-                var allButtons = driver.FindElements(By.TagName("button"));
-                Logger.Info($"Total buttons found on page: {allButtons.Count}");
-                foreach (var button in allButtons.Take(10))
-                {
-                    try
-                    {
-                        var id = button.GetAttribute("id") ?? "no-id";
-                        var classes = button.GetAttribute("class") ?? "no-class";
-                        var text = button.Text ?? "no-text";
-                        var type = button.GetAttribute("type") ?? "no-type";
-                        var dataCy = button.GetAttribute("data-cy") ?? "no-data-cy";
-                        Logger.Info($"Button: id='{id}', class='{classes}', text='{text}', type='{type}', data-cy='{dataCy}'");
-                    }
-                    catch { }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Failed to enumerate buttons");
-            }
+            Logger.Error("Search button not found");
             return false;
         }
-        Logger.Info($"Found search button, attempting to click");
+        Logger.Info("Clicking search button (generic)");
         return SafeClick(driver, btn);
     }
 
@@ -302,38 +418,24 @@ public class MainPage : BasePage
         var driver = AqualityServices.Browser.Driver;
         try
         {
-            // Wait a moment for any dynamic content
-            Thread.Sleep(1000);
+            Thread.Sleep(500);
             var btn = driver.FindElements(By.Id("search-form-submit")).FirstOrDefault(e => e.Displayed && e.Enabled);
             if (btn == null)
             {
-                Logger.Warn("Search button with id 'search-form-submit' not found or not enabled.");
-                var searchButtons = driver.FindElements(By.XPath("//button[contains(@id,'search') or contains(@class,'search') or contains(.,'Szukaj')]"));
-                Logger.Info($"Found {searchButtons.Count} potential search buttons:");
-                foreach (var searchBtn in searchButtons.Take(5))
-                {
-                    try
-                    {
-                        var id = searchBtn.GetAttribute("id") ?? "no-id";
-                        var classes = searchBtn.GetAttribute("class") ?? "no-class";
-                        var text = searchBtn.Text ?? "no-text";
-                        Logger.Info($"Alternative search button: id='{id}', class='{classes}', text='{text}', displayed={searchBtn.Displayed}, enabled={searchBtn.Enabled}");
-                    }
-                    catch { }
-                }
-                return false;
+                Logger.Warn("Primary search button not found, trying generic");
+                return ClickSearch();
             }
             Logger.Info("Clicking primary search button (id='search-form-submit')");
             return SafeClick(driver, btn);
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to click search button by id");
+            Logger.Warn(ex, "Failed to click primary search button");
             return false;
         }
     }
 
-    public bool Search() => ClickSearch();
+    public bool Search() => ClickSearchButton();
 
     public bool OpenLogin()
     {

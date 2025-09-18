@@ -1,0 +1,433 @@
+public void ApplyLocationAndPrice(string location, decimal minPrice, decimal maxPrice)
+{
+    Log.Info($"Filtering by location '{location}' and price range {minPrice}-{maxPrice}");
+    ApplyFormFiltering(location, minPrice, maxPrice);
+}
+
+private void ApplyFormFiltering(string location, decimal minPrice, decimal maxPrice)
+{
+    Log.Info("Applying main form filtering with robust waits");
+
+    EnsureOnMainPage();
+
+    var js = (IJavaScriptExecutor)Driver;
+    js.ExecuteScript("window.scrollTo(0, 0);");
+    
+    // Remove any potential overlays that might interfere
+    RemoveInterferingOverlays(js);
+
+    try
+    {
+        // 1) Find and fill location input with enhanced interaction safety
+        var locationInput = FindLocationInputWithRetry();
+        if (locationInput == null)
+            throw new InvalidOperationException("Location input not found");
+
+        Log.Info("Location input found, entering location");
+        
+        // Enhanced location input interaction with safety checks
+        if (!TryInteractWithLocationInput(locationInput, location, js))
+        {
+            Log.Warn("Direct location input interaction failed, trying alternative approach");
+            // Fallback to JavaScript-based input
+            if (!TryJavaScriptLocationInput(location, js))
+            {
+                Log.Error("All location input methods failed");
+                throw new InvalidOperationException("Could not interact with location input");
+            }
+        }
+
+        // 2) Wait for and select location suggestion with improved logic
+        var suggestionSelected = WaitForAndSelectLocationSuggestion(location, js);
+        if (!suggestionSelected)
+        {
+            Log.Warn("Location suggestion selection failed, using enhanced keyboard fallback");
+            // Enhanced keyboard fallback with interaction safety
+            if (!TryKeyboardLocationInput(location, js))
+            {
+                Log.Warn("Keyboard fallback also failed - location might still work via form state");
+            }
+        }
+        
+        // 2.5) Verify location selection and wait for form to update
+        try
+        {
+            AqualityServices.Get<IAnimationWait>().Wait(1500); // Give time for form to update after selection
+            
+            var verificationLocationInput = FindLocationInput();
+            if (verificationLocationInput != null)
+            {
+                var finalLocationValue = verificationLocationInput.GetAttribute("value");
+                Log.Info($"Final location input value after suggestion selection: '{finalLocationValue}'");
+                
+                // Check if the dropdown is closed (suggestion was accepted)
+                var dropdownElements = Driver.FindElements(By.CssSelector("div[data-sentry-component='SuggestionsList'], div.e1bqfjd81"));
+                var dropdownVisible = dropdownElements.Any(e => e.Displayed);
+                
+                if (!dropdownVisible)
+                {
+                    Log.Info("✅ Dropdown closed - suggestion was accepted");
+                }
+                else
+                {
+                    Log.Warn("⚠️ Dropdown still visible - suggestion may not have been properly accepted");
+                    
+                    // Try to close dropdown by clicking elsewhere
+                    try
+                    {
+                        js.ExecuteScript("document.body.click();");
+                        AqualityServices.Get<IAnimationWait>().Wait(500);
+                        Log.Info("Clicked elsewhere to close dropdown");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn(ex, "Failed to close dropdown");
+                    }
+                }
+                
+                // Enhanced verification - check if location is in the input OR if we clicked a suggestion successfully
+                var hasLocationInInput = !string.IsNullOrEmpty(finalLocationValue) && finalLocationValue.ToLower().Contains(location.ToLower());
+                var wasDropdownClosed = !dropdownVisible;
+                var wasSuggestionClicked = suggestionSelected;
+                
+                if (!hasLocationInInput && !wasDropdownClosed && !wasSuggestionClicked)
+                {
+                    Log.Warn($"⚠️  Location input verification failed! Expected '{location}' but got '{finalLocationValue}'");
+                    Log.Warn("This might be a visual issue - will verify via final search URL");
+                }
+                else if (hasLocationInInput)
+                {
+                    Log.Info($"✅ Location selection successful: input contains '{finalLocationValue}'");
+                }
+                else if (wasSuggestionClicked && wasDropdownClosed)
+                {
+                    Log.Info($"✅ Location suggestion clicked and dropdown closed - trusting suggestion selection");
+                }
+                else
+                {
+                    Log.Info($"✅ Location selection appears functional: input='{finalLocationValue}', dropdown_closed={wasDropdownClosed}, suggestion_clicked={wasSuggestionClicked}");
+                    Log.Info("Will verify success via final search URL");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn(ex, "Post-selection verification failed");
+        }
+
+        // ... (rest of the method)
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "ApplyFormFiltering failed");
+        throw;
+    }
+}
+
+private IWebElement FindLocationInputWithRetry()
+{
+    for (int attempt = 1; attempt <= 3; attempt++)
+    {
+        try
+        {
+            Log.Info($"Finding location input (attempt {attempt}/3)");
+            var element = FindLocationInput();
+            if (element != null && IsElementInteractable(element))
+            {
+                return element;
+            }
+            
+            if (attempt < 3)
+            {
+                AqualityServices.Get<IAnimationWait>().Wait(1000);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn(ex, $"Location input search attempt {attempt} failed");
+        }
+    }
+    return null;
+}
+
+private IWebElement FindLocationInput()
+{
+    var wait = new WebDriverWait(Driver, DefaultShortWait);
+    
+    return wait.Until(d =>
+    {
+        try
+        {
+            var el = d.FindElement(By.CssSelector("input[data-cy='search.form.location.button']"));
+            return el.Displayed ? el : null;
+        }
+        catch { }
+        try
+        {
+            var el = d.FindElement(By.CssSelector("input[placeholder*='lokalizacj']"));
+            return el.Displayed ? el : null;
+        }
+        catch { }
+        try
+        {
+            var inputs = d.FindElements(By.CssSelector("input[type='text']"));
+            foreach (var input in inputs)
+            {
+                if (input.Displayed &&
+                    (input.GetAttribute("placeholder")?.ToLower().Contains("lokalizac") == true ||
+                     input.GetAttribute("aria-label")?.ToLower().Contains("lokalizac") == true))
+                {
+                    return input;
+                }
+            }
+        }
+        catch { }
+        return null;
+    });
+}
+
+private bool IsElementInteractable(IWebElement element)
+{
+    try
+    {
+        return element.Displayed && element.Enabled && element.Size.Height > 0 && element.Size.Width > 0;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+private bool TryInteractWithLocationInput(IWebElement locationInput, string location, IJavaScriptExecutor js)
+{
+    try
+    {
+        // Scroll element into view first
+        js.ExecuteScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", locationInput);
+        AqualityServices.Get<IAnimationWait>().Wait(500);
+        
+        // Check if element is still interactable after scroll
+        if (!IsElementInteractable(locationInput))
+        {
+            Log.Warn("Location input not interactable after scroll");
+            return false;
+        }
+        
+        // Try to click and clear/type
+        locationInput.Click();
+        AqualityServices.Get<IAnimationWait>().Wait(200);
+        locationInput.Clear();
+        AqualityServices.Get<IAnimationWait>().Wait(200);
+        locationInput.SendKeys(location);
+        
+        Log.Info($"✅ Successfully interacted with location input: '{location}'");
+        return true;
+    }
+    catch (ElementNotInteractableException ex)
+    {
+        Log.Warn(ex, "Location input not interactable - element found but blocked");
+        return false;
+    }
+    catch (Exception ex)
+    {
+        Log.Warn(ex, "Failed to interact with location input");
+        return false;
+    }
+}
+
+private bool TryJavaScriptLocationInput(string location, IJavaScriptExecutor js)
+{
+    try
+    {
+        var success = (bool)js.ExecuteScript(@"
+            try {
+                var locationInputs = [
+                    document.querySelector(""input[data-cy='search.form.location.button']""),
+                    document.querySelector(""input[placeholder*='lokalizacj']""),
+                    document.querySelectorAll(""input[type='text']"")[0]
+                ];
+                
+                for (var i = 0; i < locationInputs.length; i++) {
+                    var input = locationInputs[i];
+                    if (input && input.offsetParent !== null) {
+                        input.focus();
+                        input.value = '';
+                        input.value = arguments[0];
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        console.log('Set location via JavaScript:', arguments[0]);
+                        return true;
+                    }
+                }
+                return false;
+            } catch (e) {
+                console.error('JavaScript location input failed:', e);
+                return false;
+            }
+        ", location);
+        
+        if (success)
+        {
+            Log.Info($"✅ Successfully set location via JavaScript: '{location}'");
+            return true;
+        }
+        else
+        {
+            Log.Warn("JavaScript location input method failed");
+            return false;
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warn(ex, "JavaScript location input approach failed");
+        return false;
+    }
+}
+
+private bool TryKeyboardLocationInput(string location, IJavaScriptExecutor js)
+{
+    try
+    {
+        var locationInput = FindLocationInput();
+        if (locationInput == null || !IsElementInteractable(locationInput))
+        {
+            Log.Warn("Cannot use keyboard input - location input not available");
+            return false;
+        }
+        
+        // Make sure element is focused and ready
+        js.ExecuteScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", locationInput);
+        AqualityServices.Get<IAnimationWait>().Wait(500);
+        
+        js.ExecuteScript("arguments[0].focus();", locationInput);
+        AqualityServices.Get<IAnimationWait>().Wait(200);
+        
+        // Try keyboard navigation carefully
+        locationInput.SendKeys(Keys.ArrowDown);
+        AqualityServices.Get<IAnimationWait>().Wait(300);
+        locationInput.SendKeys(Keys.Enter);
+        
+        Log.Info("✅ Used keyboard navigation for location");
+        return true;
+    }
+    catch (ElementNotInteractableException ex)
+    {
+        Log.Warn(ex, "Keyboard location input failed - element not interactable");
+        return false;
+    }
+    catch (Exception ex)
+    {
+        Log.Warn(ex, "Keyboard location input failed");
+        return false;
+    }
+}
+
+private bool WaitForAndSelectLocationSuggestion(string location, IJavaScriptExecutor js)
+{
+    Log.Info($"Waiting for location suggestions for: {location}");
+    
+    try
+    {
+        // Wait for suggestions to appear
+        var suggestionWait = new WebDriverWait(Driver, TimeSpan.FromSeconds(3));
+        var suggestion = suggestionWait.Until(d =>
+        {
+            var xpath = $"//p[.//mark[normalize-space()='{location}']]/ancestor::div[contains(@class,'e1bqfjd82') or contains(@class,'css-qjvxxu')]";
+            var items = d.FindElements(By.XPath(xpath));
+            foreach (var item in items)
+            {
+                try
+                {
+                    if (item.Displayed)
+                    {
+                        var suggestionText = item.Text?.ToLower() ?? "";
+                        Log.Info($"🔍 Found suggestion: {suggestionText}");
+                        if (suggestionText.Contains(location.ToLower()))
+                        {
+                            Log.Info($"✅ Selected location suggestion: {suggestionText}");
+                            return item;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return items.FirstOrDefault(i => { try { return i.Displayed; } catch { return false; } });
+        });
+
+        if (suggestion != null)
+        {
+            // Enhanced suggestion click with stale element protection
+            try
+            {
+                // Click the suggestion
+                suggestion.Click();
+                Log.Info($"✅ Location suggestion clicked: {location}");
+                
+                // Wait for the input to be populated and dropdown to close with shorter timeout
+                var verificationWait = new WebDriverWait(Driver, TimeSpan.FromSeconds(2));
+                try
+                {
+                    var isValueSet = verificationWait.Until(d =>
+                    {
+                        try
+                        {
+                            // Check if dropdown is closed
+                            var dropdownElements = d.FindElements(By.CssSelector("div[data-sentry-component='SuggestionsList'], div.e1bqfjd81"));
+                            var dropdownVisible = dropdownElements.Any(e => e.Displayed);
+                            
+                            // Check if input has value
+                            var locationInput = FindLocationInput();
+                            var inputValue = locationInput?.GetAttribute("value") ?? "";
+                            
+                            // Success if dropdown is closed OR input has value containing our location
+                            if (!dropdownVisible || (!string.IsNullOrEmpty(inputValue) && inputValue.ToLower().Contains(location.ToLower())))
+                            {
+                                Log.Info($"✅ Location suggestion accepted: dropdown closed={!dropdownVisible}, input value='{inputValue}'");
+                                return true;
+                            }
+                            
+                            return false;
+                        }
+                        catch
+                        {
+                            return false;
+                        }
+                    });
+                    
+                    return isValueSet;
+                }
+                catch (WebDriverTimeoutException)
+                {
+                    // Timeout during verification is not critical if click succeeded
+                    Log.Info("⚠️ Suggestion verification timed out, but click was successful");
+                    return true;
+                }
+            }
+            catch (ElementNotInteractableException ex)
+            {
+                Log.Info("⚠️ Suggestion not interactable - DOM likely changed after typing (this is normal)");
+                return false;
+            }
+            catch (StaleElementReferenceException ex)
+            {
+                Log.Info("⚠️ Suggestion became stale - DOM updated after typing (this is normal)");
+                return false;
+            }
+            catch (Exception clickEx)
+            {
+                Log.Warn(clickEx, "Failed to click suggestion");
+                return false;
+            }
+        }
+        else
+        {
+            Log.Info("⚠️ No matching suggestion found");
+            return false;
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Info($"Location suggestion interaction skipped: {ex.GetType().Name}");
+        return false;
+    }
+}
