@@ -25,18 +25,17 @@ public class ReqnrollHooks
     [BeforeScenario(Order = 0)]
     public void PrepareBrowserAndHighlighting()
     {
-        Logger.Info("Preparing browser for scenario");
+        Logger.Info("Preparing browser for scenario (clear cookies, maximize)");
         if (AqualityServices.IsBrowserStarted)
         {
             AqualityServices.Browser.Driver.Manage().Cookies.DeleteAllCookies();
-            // Removed refresh that can cause DOM invalidation
         }
         else
         {
-            // Accessing Browser property will start browser lazily
-            _ = AqualityServices.Browser;
+            _ = AqualityServices.Browser; // lazy start
         }
         AqualityServices.Browser.Maximize();
+        // NOTE: Element highlighting API not available in current Aquality.Selenium version via AqualityServices.
         Logger.Info($"Starting scenario: {_scenarioContext.ScenarioInfo.Title}");
     }
 
@@ -45,13 +44,9 @@ public class ReqnrollHooks
     {
         try
         {
-            // Only handle popups if browser is still active
-            if (AqualityServices.IsBrowserStarted)
-            {
-                // Use any known page root (body) to attempt popup handling
-                var basePage = new MainPage(); // lightweight instantiation just for popup checks
-                basePage.HandlePopupsIfPresent();
-            }
+            if (!AqualityServices.IsBrowserStarted) return;
+            var page = new MainPage();
+            page.HandlePopupsIfPresent();
         }
         catch (Exception ex)
         {

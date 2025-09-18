@@ -11,35 +11,94 @@ public abstract class BasePage : Form
 
     protected BasePage(By locator, string name) : base(locator, name) {}
 
-    private By SurveyCloseButton => By.CssSelector("[aria-label='Close'], button[aria-label='Zamknij']");
+    private readonly By _cookieAcceptButton = By.Id("onetrust-accept-btn-handler");
+
+    // Extended set of possible survey/marketing/overlay close buttons.
+    private static readonly By[] SurveyCloseSelectors = new[]
+    {
+        By.CssSelector("[aria-label='Close']"),
+        By.CssSelector("button[aria-label='Close']"),
+        By.CssSelector("button[aria-label='Zamknij']"),
+        By.CssSelector("button[data-testid='close-button']"),
+        By.CssSelector("button[class*='close']"),
+        By.CssSelector("[class*='close'][role='button']"),
+        By.XPath("//button[contains(translate(.,'ZAMKNIJ','zamknij'),'zamknij') or contains(translate(.,'CLOSE','close'),'close')]")
+    };
+
+    public void CloseCookieIfPresent()
+    {
+        try
+        {
+            if (!AqualityServices.IsBrowserStarted) return;
+            var driver = AqualityServices.Browser.Driver;
+            var btn = driver.FindElements(_cookieAcceptButton).FirstOrDefault(e => e.Displayed && e.Enabled);
+            if (btn != null)
+            {
+                Logger.Info("Cookie consent popup detected. Accepting cookies.");
+                try
+                {
+                    btn.Click();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Standard click failed for cookie button, trying JS");
+                    try
+                    {
+                        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", btn);
+                    }
+                    catch (Exception jsEx)
+                    {
+                        Logger.Error(jsEx, "Failed to click cookie button via JS");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Error while attempting to close cookie popup (ignored)");
+        }
+    }
 
     public void CloseSurveyPopupIfPresent()
     {
         try
         {
-            // Check if browser is still active before trying to interact
             if (!AqualityServices.IsBrowserStarted) return;
-            
             var driver = AqualityServices.Browser.Driver;
-            var closeBtn = driver.FindElements(SurveyCloseButton).FirstOrDefault(e => e.Displayed && e.Enabled);
-            if (closeBtn != null)
+            foreach (var by in SurveyCloseSelectors)
             {
-                Logger.Info("Survey popup detected. Closing it.");
                 try
                 {
-                    closeBtn.Click();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Standard click on survey close button failed, trying JS");
+                    var closeBtn = driver.FindElements(by).FirstOrDefault(e => e.Displayed && e.Enabled);
+                    if (closeBtn == null) continue;
+
+                    Logger.Info($"Popup close control found using selector: {by}. Attempting to close popup.");
                     try
                     {
-                        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", closeBtn);
+                        closeBtn.Click();
                     }
-                    catch (Exception jsEx)
+                    catch (Exception ex)
                     {
-                        Logger.Error(jsEx, "Failed to close survey popup via JS");
+                        Logger.Warn(ex, "Standard click on survey/overlay close failed, trying JS");
+                        try
+                        {
+                            ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", closeBtn);
+                        }
+                        catch (Exception jsEx)
+                        {
+                            Logger.Error(jsEx, "Failed to close survey popup via JS");
+                        }
                     }
+                    // Stop after first successful close attempt
+                    break;
+                }
+                catch (StaleElementReferenceException)
+                {
+                    Logger.Debug($"Stale element encountered for selector: {by}");
+                }
+                catch (Exception innerEx)
+                {
+                    Logger.Debug(innerEx, $"Selector iteration issue for {by}");
                 }
             }
         }
@@ -53,11 +112,9 @@ public abstract class BasePage : Form
     {
         try
         {
-            // Only handle popups if browser is still running
-            if (AqualityServices.IsBrowserStarted)
-            {
-                CloseSurveyPopupIfPresent();
-            }
+            if (!AqualityServices.IsBrowserStarted) return;
+            CloseCookieIfPresent();
+            CloseSurveyPopupIfPresent();
         }
         catch (Exception ex)
         {
