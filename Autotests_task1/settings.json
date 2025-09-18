@@ -1,0 +1,17 @@
+{
+  "browserSettings": {
+    "browserName": "CHROME",
+    "headless": false,
+    "isRemote": false,
+    "timeout": 30000,
+    "retryInterval": 500,
+    "pageLoadTimeout": 60000,
+    "scriptTimeout": 30000,
+    "isElementHighlightEnabled": true
+  },
+  "chrome": {
+    "args": [
+      "--start-maximized"
+    ]
+  }
+}
