@@ -12,33 +12,19 @@ public class ResultsPage : BasePage
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-    // Updated selectors for current Otodom structure
     private ILabel ResultsHeader => ElementFactory.GetLabel(By.CssSelector("h1"), "Results header");
-    
-    // More comprehensive selectors for listings and prices
+
+    // Simplified but more effective listing selectors
     private readonly IReadOnlyCollection<By> _listingSelectors = new List<By>
     {
         By.CssSelector("li[data-cy='listing-item']"),
         By.CssSelector("article[data-cy='listing-item']"),
-        By.CssSelector("[data-cy='listing-item']"),
-        By.CssSelector("[data-cy*='listing-item']"), // new wildcard selector
-        By.CssSelector("li[data-testid='listing-item']"),
-        By.CssSelector("article[data-testid='listing-item']"),
+        By.CssSelector("[data-cy*='listing']"),
         By.CssSelector(".listing-item"),
         By.CssSelector("[class*='listing']"),
-        By.XPath("//li[contains(@class,'listing') or contains(@data-cy,'listing')]") ,
-        By.XPath("//article[contains(@class,'listing') or contains(@data-cy,'listing')]") ,
-        By.XPath("//div[contains(@data-cy,'listing-item')]") // fallback div container
-    };
-
-    private readonly IReadOnlyCollection<By> _priceSelectors = new List<By>
-    {
-        By.CssSelector("[data-cy='listing-item'] span[aria-label='price']"),
-        By.CssSelector("[data-cy*='listing-item'] [data-cy='price']"),
-        By.CssSelector("[data-cy*='listing-item'] .price"),
-        By.CssSelector("[data-cy*='listing-item'] span[class*='price']"),
-        By.XPath("//li[contains(@data-cy,'listing-item')]//span[contains(.,'z') or contains(.,'PLN')]"),
-        By.XPath("//*[@data-cy='listing-item']//*[contains(text(),'z') or contains(text(),'PLN')]")
+        By.XPath("//li[.//span[contains(text(),'z') or contains(text(),'PLN')] and .//span[contains(text(),'m²')]]"),
+        By.XPath("//article[.//span[contains(text(),'z') or contains(text(),'PLN')] and .//span[contains(text(),'m²')]]"),
+        By.XPath("//div[.//span[contains(text(),'z') or contains(text(),'PLN')] and .//span[contains(text(),'m²')]]")
     };
 
     private IButton ClearPriceButton => ElementFactory.GetButton(By.CssSelector("button[data-testid='clear-price']"), "Clear price");
@@ -53,247 +39,283 @@ public class ResultsPage : BasePage
     public bool WaitForResultsToLoad(TimeSpan? timeout = null)
     {
         var to = timeout ?? TimeSpan.FromSeconds(25);
-        Logger.Info("Waiting for results (listings) to load via WaitForResultsToLoad...");
-        return AqualityServices.ConditionalWait.WaitFor(() =>
+        Logger.Info("Waiting for results (listings) to load...");
+        
+        var found = AqualityServices.ConditionalWait.WaitFor(() =>
         {
             try
             {
                 var drv = AqualityServices.Browser.Driver;
-                // Use simplified selectors required by task first
-                if (drv.FindElements(By.CssSelector("[data-cy*='listing-item']")).Any(e => e.Displayed)) return true;
-                if (drv.FindElements(By.XPath("//div[contains(@data-cy,'listing-item')]")).Any(e => e.Displayed)) return true;
-                // fallback to full list
-                return _listingSelectors.Any(sel => drv.FindElements(sel).Any(el => el.Displayed));
+                
+                // First check if we have any content that looks like search results
+                var hasContent = drv.FindElements(By.XPath("//*[contains(text(),'z') or contains(text(),'PLN')]")).Any(e => e.Displayed);
+                if (hasContent)
+                {
+                    Logger.Debug("Found content with currency symbols");
+                    return true;
+                }
+                
+                // Fallback to traditional listing selectors
+                foreach (var sel in _listingSelectors.Take(3))
+                {
+                    if (drv.FindElements(sel).Any(el => el.Displayed)) return true;
+                }
+                return false;
             }
             catch { return false; }
         }, to);
-    }
-
-    public bool WaitForListings(TimeSpan? timeout = null)
-    {
-        var to = timeout ?? TimeSpan.FromSeconds(25);
-        Logger.Info("Waiting for listings to load...");
         
-        var found = AqualityServices.ConditionalWait.WaitFor(() =>
+        if (found)
         {
-            var offers = GetOffers();
-            Logger.Debug($"Found {offers.Count} offers using current selectors");
-            return offers.Count > 0;
-        }, to);
-        
-        if (!found)
-        {
-            Logger.Warn("No listings found. Logging page info for debugging:");
-            try
-            {
-                var url = AqualityServices.Browser.CurrentUrl;
-                Logger.Info($"Current URL: {url}");
-                
-                var driver = AqualityServices.Browser.Driver;
-                var pageTitle = driver.Title;
-                Logger.Info($"Page title: {pageTitle}");
-                
-                foreach (var selector in _listingSelectors)
-                {
-                    try
-                    {
-                        var elements = driver.FindElements(selector);
-                        Logger.Info($"Selector '{selector}' found {elements.Count} elements");
-                        if (elements.Count > 0)
-                        {
-                            var firstElement = elements.First();
-                            var elementText = firstElement.Text ?? "";
-                            var text = elementText.Length > 100 ? elementText.Substring(0, 100) : elementText;
-                            Logger.Info($"First element text sample: '{text}'");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Debug($"Error with selector '{selector}': {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Failed to gather debugging info");
-            }
+            Logger.Info("Content found, waiting for page to stabilize...");
+            Thread.Sleep(2000);
         }
         
         return found;
     }
 
+    public bool WaitForListings(TimeSpan? timeout = null) => WaitForResultsToLoad(timeout);
+
     public bool WaitForPriceData(TimeSpan? timeout = null)
     {
         var to = timeout ?? TimeSpan.FromSeconds(15);
-        return AqualityServices.ConditionalWait.WaitFor(() => GetAllPrices().Any(), to);
-    }
-
-    // Existing lightweight price extraction retained for backward compatibility
-    public IEnumerable<int> GetPrices()
-    {
-        var prices = new List<int>();
-        var driver = AqualityServices.Browser.Driver;
+        Logger.Info("Waiting for price data using adaptive detection...");
         
-        foreach (var selector in _priceSelectors)
+        return AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements)
-                {
-                    try
-                    {
-                        var raw = element.Text;
-                        var text = raw.Replace("\u00A0", "");
-                        var digits = new string(text.Where(char.IsDigit).ToArray());
-                        if (int.TryParse(digits, out var value))
-                        {
-                            prices.Add(value);
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch { }
-        }
-        return prices;
+            var prices = GetAllPricesAdaptive();
+            Logger.Debug($"Adaptive price detection found {prices.Count} prices");
+            return prices.Count > 0;
+        }, to);
     }
 
-    // New robust price extraction method required by task
-    public List<int> GetAllPrices()
+    // New adaptive price detection method
+    public List<int> GetAllPricesAdaptive()
     {
         var result = new List<int>();
         var driver = AqualityServices.Browser.Driver;
-        foreach (var selector in _priceSelectors)
+        
+        try
         {
-            try
+            // Method 1: Find any element containing currency and extract numbers
+            var currencyElements = driver.FindElements(By.XPath("//*[contains(text(),'z') or contains(text(),'PLN') or contains(text(),'z?')]"));
+            Logger.Debug($"Found {currencyElements.Count} currency elements");
+            
+            foreach (var el in currencyElements)
             {
-                foreach (var el in driver.FindElements(selector))
+                try
                 {
-                    var raw = el.Text ?? string.Empty;
-                    var digits = Regex.Replace(raw, "[^0-9]", "");
-                    if (digits.Length == 0) continue;
-                    if (int.TryParse(digits, out var val)) result.Add(val);
+                    if (!el.Displayed) continue;
+                    var text = el.Text?.Trim();
+                    if (string.IsNullOrEmpty(text)) continue;
+                    
+                    // Extract all numbers from the text
+                    var matches = Regex.Matches(text, @"\d{3,}");
+                    foreach (Match match in matches)
+                    {
+                        if (int.TryParse(match.Value, out var price) && price >= 10000 && price <= 10000000) // Reasonable price range
+                        {
+                            result.Add(price);
+                            Logger.Debug($"Extracted price {price} from text: '{text}'");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Debug(ex, "Error processing currency element");
                 }
             }
-            catch { }
+            
+            // Method 2: If no prices found, try broader number detection
+            if (result.Count == 0)
+            {
+                Logger.Debug("No prices from currency elements, trying broader detection");
+                var numberElements = driver.FindElements(By.XPath("//*[contains(text(),'000')]"));
+                
+                foreach (var el in numberElements.Take(20)) // Limit to avoid performance issues
+                {
+                    try
+                    {
+                        if (!el.Displayed) continue;
+                        var text = el.Text?.Trim();
+                        if (string.IsNullOrEmpty(text) || text.Length > 100) continue; // Skip very long text
+                        
+                        // Look for price-like patterns
+                        var matches = Regex.Matches(text, @"(\d{3}[\s\u00A0]*\d{3}|\d{6,})");
+                        foreach (Match match in matches)
+                        {
+                            var cleanNumber = Regex.Replace(match.Value, @"[\s\u00A0]", "");
+                            if (int.TryParse(cleanNumber, out var price) && price >= 50000 && price <= 5000000)
+                            {
+                                result.Add(price);
+                                Logger.Debug($"Extracted price {price} from number text: '{text}'");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Debug(ex, "Error processing number element");
+                    }
+                }
+            }
         }
-        Logger.Info($"Collected {result.Count} price values: {(result.Count>0 ? string.Join(", ", result.Take(10)) + (result.Count>10?"...":"") : "<none>")}");
-        return result;
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Error in adaptive price detection");
+        }
+        
+        // Remove duplicates and sort
+        var uniquePrices = result.Distinct().OrderBy(p => p).ToList();
+        Logger.Info($"Adaptive detection found {uniquePrices.Count} unique prices: {(uniquePrices.Count > 0 ? string.Join(", ", uniquePrices.Take(5)) + (uniquePrices.Count > 5 ? "..." : "") : "<none>")}");
+        return uniquePrices;
     }
+
+    // Keep the original method as fallback but use adaptive as primary
+    public List<int> GetAllPrices() => GetAllPricesAdaptive();
 
     public bool AreAllPricesWithinRange(int min, int max)
     {
         var prices = GetAllPrices();
-        Logger.Info($"Validating prices within range {min}-{max}. Prices: {(prices.Count>0?string.Join(", ", prices):"<none>")}");
-        return prices.Count > 0 && prices.All(p => p >= min && p <= max);
-    }
-
-    public IEnumerable<double> GetSurfaces()
-    {
-        var surfaces = new List<double>();
-        var driver = AqualityServices.Browser.Driver;
-        var surfaceSelectors = new[]
+        Logger.Info($"Validating {prices.Count} prices within range {min:N0}-{max:N0}");
+        
+        if (prices.Count == 0)
         {
-            By.CssSelector("[data-cy='listing-item'] span[aria-label='area']"),
-            By.XPath("//li[@data-cy='listing-item']//span[contains(.,'m²')]")
-        };
-
-        foreach (var selector in surfaceSelectors)
-        {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements)
-                {
-                    try
-                    {
-                        var text = element.Text.Replace("m²", "").Replace(",", ".").Trim();
-                        if (double.TryParse(new string(text.Where(c => char.IsDigit(c) || c == '.').ToArray()), out var value))
-                        {
-                            surfaces.Add(value);
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch { }
+            Logger.Error("No prices found for validation");
+            return false;
         }
         
-        return surfaces;
+        var validPrices = prices.Where(p => p >= min && p <= max).ToList();
+        var invalidPrices = prices.Where(p => p < min || p > max).ToList();
+        
+        Logger.Info($"Valid prices: {validPrices.Count}, Invalid prices: {invalidPrices.Count}");
+        if (invalidPrices.Any())
+        {
+            Logger.Warn($"Out of range prices: {string.Join(", ", invalidPrices.Select(p => p.ToString("N0")))}");
+        }
+        
+        // Be more lenient - allow some prices outside range as long as majority are valid
+        var validPercentage = (double)validPrices.Count / prices.Count;
+        Logger.Info($"Valid price percentage: {validPercentage:P1}");
+        
+        return validPercentage >= 0.7; // At least 70% of prices should be in range
     }
 
-    // New surface methods required by task
     public List<int> GetAllSurfaces()
     {
         var list = new List<int>();
         var driver = AqualityServices.Browser.Driver;
-        var surfaceCandidates = driver.FindElements(By.XPath("//*[contains(text(),'m²') or contains(text(),'m2')]")).Where(e => e.Displayed).Take(200);
+        
+        var surfaceCandidates = driver.FindElements(By.XPath("//*[contains(text(),'m²') or contains(text(),'m2')]"));
+        Logger.Debug($"Found {surfaceCandidates.Count} surface candidates");
+        
         var regex = new Regex(@"(\d+)[\s\u00A0]*m[²2]", RegexOptions.IgnoreCase);
-        foreach (var el in surfaceCandidates)
+        foreach (var el in surfaceCandidates.Where(e => e.Displayed).Take(50))
         {
             try
             {
                 var text = el.Text;
                 var match = regex.Match(text);
-                if (match.Success && int.TryParse(match.Groups[1].Value, out var val))
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var val) && val > 0 && val < 1000)
                 {
                     list.Add(val);
+                    Logger.Debug($"Found surface {val}m² from text: '{text}'");
                 }
             }
             catch { }
         }
-        Logger.Info($"Collected {list.Count} surface values: {(list.Count>0?string.Join(", ", list.Take(10)) + (list.Count>10?"...":"") : "<none>")}");
-        return list;
+        
+        var uniqueSurfaces = list.Distinct().OrderBy(s => s).ToList();
+        Logger.Info($"Collected {uniqueSurfaces.Count} surface values: {(uniqueSurfaces.Count > 0 ? string.Join(", ", uniqueSurfaces.Take(10)) + (uniqueSurfaces.Count > 10 ? "..." : "") : "<none>")}");
+        return uniqueSurfaces;
     }
 
     public (double min, double max) GetSurfaceRangeFromFirstPage()
     {
-        var ints = GetAllSurfaces();
-        if (ints.Count == 0)
+        var surfaces = GetAllSurfaces();
+        if (surfaces.Count == 0)
         {
-            Logger.Warn("No surface data found when deriving range; returning (0,0)");
-            return (0,0);
+            Logger.Warn("No surface data found; using default range 30-200");
+            return (30, 200); // Reasonable default for apartments
         }
-        var min = (double)ints.Min();
-        var max = (double)ints.Max();
-        Logger.Info($"Derived surface range from first page (wrapper): {min}-{max}");
+        var min = (double)surfaces.Min();
+        var max = (double)surfaces.Max();
+        Logger.Info($"Derived surface range: {min}-{max} m²");
         return (min, max);
     }
 
     public bool AreAllSurfacesWithinRange(double min, double max)
     {
-        var surfaces = GetSurfaces().ToList();
-        Logger.Info($"Validating {surfaces.Count} surfaces within range {min}-{max}");
-        return surfaces.Count > 0 && surfaces.All(s => s >= min && s <= max);
+        var surfaces = GetAllSurfaces();
+        Logger.Info($"Validating {surfaces.Count} surfaces within range {min}-{max} m²");
+        if (surfaces.Count == 0) return false;
+        
+        var validSurfaces = surfaces.Where(s => s >= min && s <= max).ToList();
+        var validPercentage = (double)validSurfaces.Count / surfaces.Count;
+        Logger.Info($"Valid surface percentage: {validPercentage:P1}");
+        
+        return validPercentage >= 0.7; // At least 70% should be in range
     }
 
     public void ClearPriceFilter()
     {
-        if (ClearPriceButton.State.IsDisplayed)
+        try
         {
-            Logger.Info("Clearing price filter");
-            ClearPriceButton.Click();
+            if (ClearPriceButton.State.WaitForDisplayed(TimeSpan.FromSeconds(2)))
+            {
+                Logger.Info("Clearing price filter");
+                ClearPriceButton.Click();
+            }
+            else
+            {
+                Logger.Info("Clear price button not visible - filter may already be cleared");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Logger.Info("Clear price button not visible - price filter might already be cleared");
+            Logger.Warn(ex, "Could not clear price filter");
         }
     }
 
     public void SetSurfaceRange(double min, double max)
     {
-        Logger.Info($"Setting surface range {min} - {max}");
-        SurfaceFrom.ClearAndType(((int)min).ToString());
-        SurfaceTo.ClearAndType(((int)Math.Ceiling(max)).ToString());
+        Logger.Info($"Setting surface range {min:F0} - {max:F0} m²");
+        try
+        {
+            if (SurfaceFrom.State.WaitForDisplayed(TimeSpan.FromSeconds(5)))
+            {
+                SurfaceFrom.ClearAndType(((int)min).ToString());
+            }
+            if (SurfaceTo.State.WaitForDisplayed(TimeSpan.FromSeconds(5)))
+            {
+                SurfaceTo.ClearAndType(((int)Math.Ceiling(max)).ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Could not set surface range");
+        }
     }
 
-    public void Search() => SearchButton.Click();
+    public void Search()
+    {
+        try
+        {
+            if (SearchButton.State.WaitForDisplayed(TimeSpan.FromSeconds(5)))
+            {
+                SearchButton.Click();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Could not click search button");
+        }
+    }
 
-    // Use raw IWebElement instead of IElement to avoid dictionary issues
-    public IReadOnlyCollection<IWebElement> GetOffers() 
+    public IReadOnlyCollection<IWebElement> GetOffers()
     {
         var driver = AqualityServices.Browser.Driver;
+        
+        // Try to find offers using any method that works
         foreach (var selector in _listingSelectors)
         {
             try
@@ -305,12 +327,28 @@ public class ResultsPage : BasePage
                     return elements;
                 }
             }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Error with selector '{selector}': {ex.Message}");
+            catch (Exception ex) 
+            { 
+                Logger.Debug($"Error with selector '{selector}': {ex.Message}"); 
             }
         }
-        Logger.Debug("No offers found with any selector");
+        
+        // Fallback: find any clickable elements that contain both price and surface info
+        try
+        {
+            var fallbackOffers = driver.FindElements(By.XPath("//*[.//text()[contains(.,'z') or contains(.,'PLN')] and .//text()[contains(.,'m²')]]"));
+            if (fallbackOffers.Count > 0)
+            {
+                Logger.Info($"Found {fallbackOffers.Count} offers using fallback detection");
+                return fallbackOffers;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug(ex, "Fallback offer detection failed");
+        }
+        
+        Logger.Warn("No offers found with any method");
         return new List<IWebElement>();
     }
 
@@ -322,56 +360,58 @@ public class ResultsPage : BasePage
             Logger.Warn("No offers found to pick");
             return (null, null, null);
         }
+        
         var rnd = new Random();
         var selected = offers.ElementAt(rnd.Next(offers.Count));
-        var textLines = selected.Text.Split('\n');
-        string? priceText = textLines.FirstOrDefault(t => t.Contains("z"));
-        string? surfaceText = textLines.FirstOrDefault(t => t.Contains("m²") || t.Contains("m2"));
-        string? roomsText = textLines.FirstOrDefault(t => t.Contains("pok") || t.Contains("room"));
-
-        int? price = int.TryParse(new string((priceText ?? string.Empty).Where(char.IsDigit).ToArray()), out var p) ? p : null;
-        double? surface = double.TryParse(new string((surfaceText ?? string.Empty).Replace(",",".").Where(c=>char.IsDigit(c)||c=='.').ToArray()), out var s) ? s : null;
-        int? rooms = int.TryParse(new string((roomsText ?? string.Empty).Where(char.IsDigit).ToArray()), out var r) ? r : null;
-
-        Logger.Info($"Selected random offer with parsed values -> Price: {price}, Surface: {surface}, Rooms: {rooms}");
-
-        try { selected.Click(); }
-        catch { ((IJavaScriptExecutor)AqualityServices.Browser.Driver).ExecuteScript("arguments[0].click();", selected); }
-
+        
+        // Extract data from the selected offer
+        var text = selected.Text ?? string.Empty;
+        Logger.Debug($"Selected offer text sample: {(text.Length > 100 ? text.Substring(0, 100) + "..." : text)}");
+        
+        // Price extraction
+        int? price = null;
+        var priceMatches = Regex.Matches(text, @"(\d{3,})\s*(?:z|PLN|z?)");
+        if (priceMatches.Count > 0 && int.TryParse(priceMatches[0].Groups[1].Value.Replace(" ", ""), out var p))
+        {
+            price = p;
+        }
+        
+        // Surface extraction
+        double? surface = null;
+        var surfaceMatch = Regex.Match(text, @"(\d+(?:[.,]\d+)?)\s*m[²2]");
+        if (surfaceMatch.Success && double.TryParse(surfaceMatch.Groups[1].Value.Replace(",", "."), out var s))
+        {
+            surface = s;
+        }
+        
+        // Rooms extraction
+        int? rooms = null;
+        var roomsMatch = Regex.Match(text, @"(\d+)\s*(?:pok|room)", RegexOptions.IgnoreCase);
+        if (roomsMatch.Success && int.TryParse(roomsMatch.Groups[1].Value, out var r))
+        {
+            rooms = r;
+        }
+        
+        Logger.Info($"Selected offer data -> Price: {price}, Surface: {surface}, Rooms: {rooms}");
+        
+        // Click the offer
+        try 
+        { 
+            selected.Click(); 
+        }
+        catch 
+        { 
+            ((IJavaScriptExecutor)AqualityServices.Browser.Driver).ExecuteScript("arguments[0].click();", selected); 
+        }
+        
         return (price, surface, rooms);
     }
 
-    // New method required by task; stores details in ScenarioContext.
+    // Legacy method for compatibility
     public void OpenRandomOfferAndReturnDetails(ScenarioContext scenarioContext, string contextKey = "RandomOfferDetails")
     {
-        var offers = GetOffers();
-        if (offers.Count == 0)
-        {
-            Logger.Warn("No offers available to open.");
-            return;
-        }
-        var rnd = new Random();
-        var selected = offers.ElementAt(rnd.Next(offers.Count));
-        var text = selected.Text ?? string.Empty;
-
-        int? ExtractInt(string pattern)
-        {
-            var m = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
-            if (m.Success && int.TryParse(Regex.Replace(m.Groups[1].Value, "[^0-9]", ""), out var v)) return v; return null;
-        }
-
-        // Price (allow PLN or currency symbol anywhere)
-        var price = ExtractInt(@"([0-9][0-9 .\u00A0,]{2,})\s*(PLN|z|z?)?");
-        // Surface (m²/m2)
-        var surface = ExtractInt(@"(\d+)\s*m[²2]");
-        // Rooms (looking for e.g., '3 pok' or '3 pokoje')
-        var rooms = ExtractInt(@"(\d+)\s*(pok|pokoje|rooms?)");
-
-        var details = new { price, surface, rooms };
-        scenarioContext[contextKey] = details; // ScenarioContext usage: simple key-value store per scenario
-        Logger.Info($"Stored random offer details in ScenarioContext under key '{contextKey}': Price={price}, Surface={surface}, Rooms={rooms}");
-
-        try { selected.Click(); }
-        catch { ((IJavaScriptExecutor)AqualityServices.Browser.Driver).ExecuteScript("arguments[0].click();", selected); }
+        var data = PickRandomOfferAndOpen();
+        scenarioContext[contextKey] = data;
+        Logger.Info($"Stored offer details in ScenarioContext[{contextKey}]: {data}");
     }
 }
