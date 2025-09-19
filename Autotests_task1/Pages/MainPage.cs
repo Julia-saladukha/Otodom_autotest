@@ -250,8 +250,7 @@ public class MainPage : BasePage
             var wait = new WebDriverWait(driver, ShortWait);
             var suggestion = wait.Until(d =>
             {
-                var items = d.FindElements(By.XPath($"//p[.//mark[translate(normalize-space(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')='{location.ToLower()}']]//ancestor::div[contains(@class,'e1bqfjd82') or contains(@class,'css-')]" +
-                    $"|//li[contains(@class,'suggestion')][.//strong[contains(.,'{location}')]]"));
+                var items = d.FindElements(By.XPath($"//div[@role='listitem'][.//mark[normalize-space()='{location}']]"));
                 return items.FirstOrDefault(i => i.Displayed);
             });
             if (suggestion != null)
@@ -259,6 +258,29 @@ public class MainPage : BasePage
                 Logger.Info("Clicking location suggestion");
                 suggestion.Click();
                 Thread.Sleep(300);
+                
+                // Click on logo after suggestion selection
+                try
+                {
+                    Logger.Info("Clicking on Otodom logo");
+                    var logoElement = driver.FindElement(By.XPath("//a[@data-sentry-element = 'Logo']"));
+                    if (logoElement.Displayed && logoElement.Enabled)
+                    {
+                        SafeClick(driver, logoElement);
+
+                        Logger.Info("Successfully clicked on logo");
+                        Thread.Sleep(500); // Allow page to process logo click
+                    }
+                    else
+                    {
+                        Logger.Warn("Logo element found but not clickable");
+                    }
+                }
+                catch (Exception logoEx)
+                {
+                    Logger.Warn(logoEx, "Failed to click logo after suggestion selection");
+                }
+                
                 return true;
             }
         }
@@ -339,6 +361,7 @@ public class MainPage : BasePage
 
         // 2. Attempt to pick suggestion
         var suggestionPicked = SelectLocationSuggestion(location);
+        WaitForResultsCounter();
         if (!suggestionPicked && input != null)
         {
             Logger.Warn("Suggestion click failed, trying keyboard fallback");
@@ -449,5 +472,19 @@ public class MainPage : BasePage
         Logger.Info("Opening login dialog/page");
         return SafeClick(driver, el);
     }
+    private bool WaitForResultsCounter()
+    {
+        return AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            try
+            {
+                var driver = AqualityServices.Browser.Driver;
+                var counterElement = driver.FindElement(By.CssSelector("div.css-11lxvnt"));
+                return counterElement.Displayed && !string.IsNullOrWhiteSpace(counterElement.Text);
+            }
+            catch { return false; }
+        }, TimeSpan.FromSeconds(10));
+    }
+
     #endregion
 }
