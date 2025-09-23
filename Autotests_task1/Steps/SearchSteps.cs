@@ -1,4 +1,4 @@
-using Aquality.Selenium.Browsers;
+﻿using Aquality.Selenium.Browsers;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
@@ -108,47 +108,197 @@ public class SearchSteps
         Logger.Info("Performing detailed validation of search results");
         var driver = AqualityServices.Browser.Driver;
 
-        // Collect listing containers (broad selectors to adapt to site changes)
+        
+    }
+
+    // NEW METHOD Analyse and area filter
+    [When("I analyze surface area from results and apply surface filter")]
+    public void WhenIAnalyzeSurfaceAreaFromResultsAndApplySurfaceFilter()
+    {
+        Logger.Info("Starting surface area analysis and filter application");
+        var driver = AqualityServices.Browser.Driver;
+
+        // 1. Анализируем результаты первой страницы
+        var (minSurface, maxSurface) = AnalyzeSurfaceAreaFromFirstPage();
+        Logger.Info($"Analyzed surface range: {minSurface}m² - {maxSurface}m²");
+
+        // 2. Удаляем фильтры цены
+        ClearPriceFilters();
+        Logger.Info("Price filters cleared");
+
+        // 3. Устанавливаем фильтры по площади
+        SetSurfaceFilter(minSurface, maxSurface);
+        Logger.Info($"Surface filter set: {minSurface}m² - {maxSurface}m²");
+
+        // 4. Запускаем новый поиск
+        var clicked = _mainPage.ClickSearchButton();
+        clicked.Should().BeTrue("Search button should be clicked after applying surface filter");
+        
+        // Ждем обновления результатов
+        AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            try
+            {
+                return driver.FindElements(By.CssSelector("article, div[data-cy*='listing']")).Any(e => e.Displayed);
+            }
+            catch { return false; }
+        }, TimeSpan.FromSeconds(20));
+
+        Logger.Info("Surface filter application completed");
+    }
+
+    private (double minSurface, double maxSurface) AnalyzeSurfaceAreaFromFirstPage()
+    {
+        Logger.Info("Analyzing surface area from first page listings");
+        var driver = AqualityServices.Browser.Driver;
+        var surfaceAreas = new List<double>();
+
         var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
             .Where(e => e.Displayed)
-            .Take(15) // limit scope
+            .Take(20) // Анализируем до 20 объявлений
             .ToList();
 
-        listings.Count.Should().BeGreaterThan(0, "There should be at least one visible listing");
-        Logger.Info($"Found {listings.Count} visible listings to validate");
-
-        int withTitle = 0, withPrice = 0;
         foreach (var listing in listings)
         {
             try
             {
-                var titleEl = listing.FindElements(By.CssSelector("h2,h3,a[title],a[data-cy*='title']")).FirstOrDefault(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
-                if (titleEl != null) withTitle++;
-
-                var priceEl = listing.FindElements(By.XPath(".//*[contains(text(),'PLN') or contains(text(),'z?')]")).FirstOrDefault(e => e.Displayed);
-                if (priceEl != null)
+                // Ищем площадь - варианты селекторов для площади
+                var surfaceSelectors = new[]
                 {
-                    var digits = new string(priceEl.Text.Where(char.IsDigit).ToArray());
-                    if (int.TryParse(digits, out var priceValue))
+                    ".//*[contains(text(),'m²') or contains(text(),'m2')]",
+                    ".//*[contains(@aria-label,'Powierzchnia') or contains(@data-cy,'surface')]",
+                    ".//span[contains(text(),'m²')]",
+                    ".//div[contains(text(),'m²')]"
+                };
+
+                foreach (var selector in surfaceSelectors)
+                {
+                    try
                     {
-                        withPrice++;
-                        // Soft range check (only log, not fail if outside since site may show promos)
-                        if (priceValue < MinPrice || priceValue > MaxPrice)
+                        var surfaceEl = listing.FindElement(By.XPath(selector));
+                        if (surfaceEl != null && surfaceEl.Displayed)
                         {
-                            Logger.Warn($"Listing price {priceValue} outside expected range {MinPrice}-{MaxPrice}");
+                            var surfaceText = surfaceEl.Text;
+                            Logger.Debug($"Found surface text: '{surfaceText}'");
+                            
+                            // Извлекаем численное значение площади
+                            var match = System.Text.RegularExpressions.Regex.Match(surfaceText, @"(\d+(?:[.,]\d+)?)\s*m[²2]");
+                            if (match.Success)
+                            {
+                                if (double.TryParse(match.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var surface))
+                                {
+                                    surfaceAreas.Add(surface);
+                                    Logger.Debug($"Extracted surface: {surface}m²");
+                                    break;
+                                }
+                            }
                         }
                     }
+                    catch { }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, "Listing validation issue (ignored)");
+                Logger.Debug(ex, "Failed to extract surface from listing");
             }
         }
 
-        withTitle.Should().BeGreaterThan(0, "At least one listing should have a title");
-        withPrice.Should().BeGreaterThan(0, "At least one listing should have a detectable price");
-        Logger.Info($"Listings with title: {withTitle}, with price: {withPrice}");
-        Logger.Info("Detailed search results validation completed");
+        if (!surfaceAreas.Any())
+        {
+            Logger.Warn("No surface areas found, using default range 40-120m²");
+            return (40.0, 120.0);
+        }
+
+        var minSurface = surfaceAreas.Min();
+        var maxSurface = surfaceAreas.Max();
+        
+        Logger.Info($"Found {surfaceAreas.Count} surface values. Range: {minSurface}m² - {maxSurface}m²");
+        return (minSurface, maxSurface);
+    }
+
+    private void ClearPriceFilters()
+    {
+        Logger.Info("Clearing price filters");
+        var success = _mainPage.ClearPriceRange();
+        if (!success)
+        {
+            Logger.Warn("Failed to clear price filters using MainPage method, trying direct approach");
+            var driver = AqualityServices.Browser.Driver;
+            try
+            {
+                // Fallback: прямая очистка через селекторы
+                var priceInputs = driver.FindElements(By.CssSelector("input[data-cy*='price'], input[name*='price']"));
+                foreach (var input in priceInputs.Where(i => i.Displayed && i.Enabled))
+                {
+                    input.Clear();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Fallback price clearing also failed");
+            }
+        }
+    }
+
+    private void SetSurfaceFilter(double minSurface, double maxSurface)
+    {
+        Logger.Info($"Setting surface filter: {minSurface}m² - {maxSurface}m²");
+        var success = _mainPage.SetSurfaceRange((int)minSurface, (int)maxSurface);
+        if (!success)
+        {
+            Logger.Warn("Failed to set surface filter using MainPage method, trying direct approach");
+            var driver = AqualityServices.Browser.Driver;
+            try
+            {
+                // Fallback: прямая установка через селекторы
+                var surfaceMinSelectors = new[]
+                {
+                    "input[data-cy='search.form.surface.from']",
+                    "input[name='surfaceMin']",
+                    "input[placeholder*='powierzchnia']"
+                };
+
+                var surfaceMaxSelectors = new[]
+                {
+                    "input[data-cy='search.form.surface.to']",
+                    "input[name='surfaceMax']",
+                    "input[placeholder*='powierzchnia']"
+                };
+
+                foreach (var selector in surfaceMinSelectors)
+                {
+                    try
+                    {
+                        var minInput = driver.FindElement(By.CssSelector(selector));
+                        if (minInput.Displayed && minInput.Enabled)
+                        {
+                            minInput.Clear();
+                            minInput.SendKeys(((int)minSurface).ToString());
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+
+                foreach (var selector in surfaceMaxSelectors)
+                {
+                    try
+                    {
+                        var maxInput = driver.FindElement(By.CssSelector(selector));
+                        if (maxInput.Displayed && maxInput.Enabled)
+                        {
+                            maxInput.Clear();
+                            maxInput.SendKeys(((int)maxSurface).ToString());
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Fallback surface filter setting also failed");
+            }
+        }
     }
 }

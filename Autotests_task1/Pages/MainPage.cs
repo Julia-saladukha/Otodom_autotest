@@ -74,6 +74,25 @@ public class MainPage : BasePage
         By.CssSelector("input[data-testid*='price-max']")
     };
 
+    // Adding selectors for surface area
+    private readonly IReadOnlyCollection<By> _surfaceMinLocators = new List<By>
+    {
+        By.CssSelector("input[data-cy='search.form.surface.from']"),
+        By.CssSelector("input[name='surfaceMin']"),
+        By.CssSelector("input[name*='surface_from']"),
+        By.CssSelector("input[placeholder*='powierzchnia']"),
+        By.CssSelector("input[aria-label*='Powierzchnia od']")
+    };
+
+    private readonly IReadOnlyCollection<By> _surfaceMaxLocators = new List<By>
+    {
+        By.CssSelector("input[data-cy='search.form.surface.to']"),
+        By.CssSelector("input[name='surfaceMax']"),
+        By.CssSelector("input[name*='surface_to']"),
+        By.CssSelector("input[placeholder*='powierzchnia']"),
+        By.CssSelector("input[aria-label*='Powierzchnia do']")
+    };
+
     // Enhanced search button selectors
     private readonly IReadOnlyCollection<By> _searchButtonLocators = new List<By>
     {
@@ -408,6 +427,58 @@ public class MainPage : BasePage
         catch (Exception ex)
         {
             Logger.Warn(ex, "Failed entering price range");
+            return false;
+        }
+    }
+
+    public bool SetSurfaceRange(int min, int max)
+    {
+        var driver = AqualityServices.Browser.Driver;
+        var minBox = TryFindFirstDisplayed(driver, _surfaceMinLocators);
+        var maxBox = TryFindFirstDisplayed(driver, _surfaceMaxLocators);
+        if (minBox == null || maxBox == null)
+        {
+            Logger.Error("Surface range input fields not found");
+            return false;
+        }
+        Logger.Info($"Setting surface range: {min} - {max} m²");
+        try
+        {
+            minBox.Clear();
+            minBox.SendKeys(min.ToString());
+            maxBox.Clear();
+            maxBox.SendKeys(max.ToString());
+            Thread.Sleep(300);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed entering surface range");
+            return false;
+        }
+    }
+
+    public bool ClearPriceRange()
+    {
+        var driver = AqualityServices.Browser.Driver;
+        var minBox = TryFindFirstDisplayed(driver, _priceMinLocators) ?? TryFindFirstDisplayed(driver, _priceMinLocatorsLegacy);
+        var maxBox = TryFindFirstDisplayed(driver, _priceMaxLocators) ?? TryFindFirstDisplayed(driver, _priceMaxLocatorsLegacy);
+        if (minBox == null || maxBox == null)
+        {
+            Logger.Error("Price range input fields not found for clearing");
+            return false;
+        }
+        Logger.Info("Clearing price range filters");
+        try
+        {
+            minBox.Clear();
+            maxBox.Clear();
+            Thread.Sleep(300);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed clearing price range");
             return false;
         }
     }
