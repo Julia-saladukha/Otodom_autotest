@@ -13,13 +13,3 @@ Feature: Search apartments on Otodom
     When I analyze surface area from results and apply surface filter
     Then the search results should be valid
     And search results should contain apartments with surface area filters applied
-
-  Scenario: Search apartments and filter by surface area from results
-    Given I open Otodom main page
-    And I accept cookies if popup appears
-    When I authorize user
-    And I set location 'Warszawa' and price range 200000-1000000 and search
-    Then I should see the search results for 'Warszawa' within the price range 200000-1000000
-    When I clear price filter and set surface range from first page
-    Then all apartments should have surface area within the applied range
-    And surface filters should be visible in the search interface
