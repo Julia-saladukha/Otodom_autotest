@@ -96,7 +96,7 @@ public class ResultsPage : BasePage
         }, timeout);
     }
 
-    private IList<IWebElement> GetListingElements()
+    public IList<IWebElement> GetListingElements()
     {
         var driver = AqualityServices.Browser.Driver;
         foreach (var locator in _listingLocators)
@@ -181,7 +181,7 @@ public class ResultsPage : BasePage
         return ((double)minInt, (double)maxInt);
     }
 
-    private int? ExtractSurfaceFromListing(IWebElement listing)
+    public int? ExtractSurfaceFromListing(IWebElement listing)
     {
         foreach (var locator in _surfaceLocators)
         {
@@ -205,6 +205,104 @@ public class ResultsPage : BasePage
             {
                 Logger.Debug(ex, $"Error with surface locator: {locator}");
             }
+        }
+        return null;
+    }
+
+    public int? ExtractPriceFromListing(IWebElement listing)
+    {
+        var priceText = GetPriceTextFromListing(listing);
+        if (!string.IsNullOrEmpty(priceText))
+        {
+            return ParsePriceFromText(priceText);
+        }
+        return null;
+    }
+
+    public int? ExtractRoomsFromListing(IWebElement listing)
+    {
+        var roomsSelectors = new[]
+        {
+            By.XPath(".//*[contains(text(),'pokoi') or contains(text(),'pokoje') or contains(text(),'rooms')]"),
+            By.XPath(".//*[contains(@aria-label,'pokoi') or contains(@data-cy,'rooms')]"),
+            By.CssSelector("span[class*='rooms']"),
+            By.CssSelector("div[class*='rooms']"),
+            By.XPath(".//*[text()[contains(.,'pokoi')] or text()[contains(.,'pokoje')]]")
+        };
+
+        foreach (var selector in roomsSelectors)
+        {
+            try
+            {
+                var elements = listing.FindElements(selector);
+                foreach (var element in elements.Where(e => e.Displayed))
+                {
+                    var text = element.Text?.Trim();
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    var rooms = ParseRoomsFromText(text);
+                    if (rooms.HasValue)
+                    {
+                        Logger.Debug($"Found rooms text: '{text}' -> {rooms} rooms");
+                        return rooms;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, $"Error with rooms selector: {selector}");
+            }
+        }
+        return null;
+    }
+
+    private int? ParseRoomsFromText(string text)
+    {
+        var patterns = new[]
+        {
+            @"(\d+)\s*poko[ij]",           // "3 pokoi" or "3 pokoje"
+            @"(\d+)\s*rooms?",            // "3 room" or "3 rooms"
+            @"^(\d+)$"                    // Just a number if in context of rooms
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                if (int.TryParse(match.Groups[1].Value, out var rooms))
+                {
+                    // Validate reasonable room count
+                    if (rooms >= 1 && rooms <= 10)
+                    {
+                        return rooms;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private string? GetPriceTextFromListing(IWebElement listing)
+    {
+        var priceSelectors = new[]
+        {
+            By.XPath(".//*[contains(text(),'PLN') or contains(text(),'z?')]"),
+            By.CssSelector("span[class*='price']"),
+            By.CssSelector("div[class*='price']")
+        };
+
+        foreach (var selector in priceSelectors)
+        {
+            try
+            {
+                var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed);
+                if (element != null && !string.IsNullOrEmpty(element.Text))
+                {
+                    return element.Text.Trim();
+                }
+            }
+            catch { }
         }
         return null;
     }
@@ -240,6 +338,126 @@ public class ResultsPage : BasePage
         return null;
     }
 
+    private int? ParsePriceFromText(string text)
+    {
+        var digits = new string(text.Where(char.IsDigit).ToArray());
+        if (int.TryParse(digits, out var price) && price > 1000)
+        {
+            return price;
+        }
+        return null;
+    }
+    #endregion
+
+    #region Validation Methods
+    public bool AreAllPricesWithinRange(int min, int max)
+    {
+        Logger.Info($"Validating all prices are within range {min} - {max}");
+        var listings = GetListingElements().Take(15).ToList();
+        int validPrices = 0;
+        int totalPrices = 0;
+
+        foreach (var listing in listings)
+        {
+            try
+            {
+                var price = ExtractPriceFromListing(listing);
+                if (price.HasValue)
+                {
+                    totalPrices++;
+                    if (price.Value >= min && price.Value <= max)
+                    {
+                        validPrices++;
+                    }
+                    else
+                    {
+                        Logger.Debug($"Price {price.Value} is outside range {min}-{max}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, "Failed to validate price for listing");
+            }
+        }
+
+        var isValid = totalPrices > 0 && validPrices == totalPrices;
+        Logger.Info($"Price validation: {validPrices}/{totalPrices} prices within range");
+        return isValid;
+    }
+
+    public bool AreAllSurfacesWithinRange(double min, double max)
+    {
+        Logger.Info($"Validating all surfaces are within range {min} - {max}m²");
+        var listings = GetListingElements().Take(15).ToList();
+        int validSurfaces = 0;
+        int totalSurfaces = 0;
+
+        foreach (var listing in listings)
+        {
+            try
+            {
+                var surface = ExtractSurfaceFromListing(listing);
+                if (surface.HasValue)
+                {
+                    totalSurfaces++;
+                    if (surface.Value >= min && surface.Value <= max)
+                    {
+                        validSurfaces++;
+                    }
+                    else
+                    {
+                        Logger.Debug($"Surface {surface.Value}m² is outside range {min}-{max}m²");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, "Failed to validate surface for listing");
+            }
+        }
+
+        var isValid = totalSurfaces > 0 && validSurfaces >= (totalSurfaces * 0.8); // Allow 80% tolerance
+        Logger.Info($"Surface validation: {validSurfaces}/{totalSurfaces} surfaces within range");
+        return isValid;
+    }
+
+    public (int? price, double? surface, int? rooms) PickRandomOfferAndOpen()
+    {
+        Logger.Info("Picking random offer and opening details");
+        var listings = GetListingElements().Take(10).ToList();
+        
+        if (!listings.Any())
+        {
+            Logger.Warn("No listings available to pick from");
+            return (null, null, null);
+        }
+
+        var random = new Random();
+        var selectedListing = listings[random.Next(listings.Count)];
+        
+        // Extract data before clicking
+        var price = ExtractPriceFromListing(selectedListing);
+        var surface = ExtractSurfaceFromListing(selectedListing);
+        var rooms = ExtractRoomsFromListing(selectedListing);
+        
+        try
+        {
+            // Find clickable link within the listing
+            var link = selectedListing.FindElement(By.TagName("a"));
+            link.Click();
+            Logger.Info("Clicked on random offer");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to click on offer link");
+        }
+
+        return (price, surface.HasValue ? (double?)surface.Value : null, rooms);
+    }
+    #endregion
+
+    #region Filter Methods
     public void ClearPriceFilter()
     {
         Logger.Info("Clearing price filter");
@@ -398,151 +616,6 @@ public class ResultsPage : BasePage
             }
         }
         return null;
-    }
-    #endregion
-
-    #region Validation Methods
-    public bool AreAllPricesWithinRange(int min, int max)
-    {
-        Logger.Info($"Validating all prices are within range {min} - {max}");
-        var listings = GetListingElements().Take(15).ToList();
-        int validPrices = 0;
-        int totalPrices = 0;
-
-        foreach (var listing in listings)
-        {
-            try
-            {
-                var priceText = ExtractPriceFromListing(listing);
-                if (!string.IsNullOrEmpty(priceText))
-                {
-                    var price = ParsePriceFromText(priceText);
-                    if (price.HasValue)
-                    {
-                        totalPrices++;
-                        if (price.Value >= min && price.Value <= max)
-                        {
-                            validPrices++;
-                        }
-                        else
-                        {
-                            Logger.Debug($"Price {price.Value} is outside range {min}-{max}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to validate price for listing");
-            }
-        }
-
-        var isValid = totalPrices > 0 && validPrices == totalPrices;
-        Logger.Info($"Price validation: {validPrices}/{totalPrices} prices within range");
-        return isValid;
-    }
-
-    public bool AreAllSurfacesWithinRange(double min, double max)
-    {
-        Logger.Info($"Validating all surfaces are within range {min} - {max}m²");
-        var listings = GetListingElements().Take(15).ToList();
-        int validSurfaces = 0;
-        int totalSurfaces = 0;
-
-        foreach (var listing in listings)
-        {
-            try
-            {
-                var surface = ExtractSurfaceFromListing(listing);
-                if (surface.HasValue)
-                {
-                    totalSurfaces++;
-                    if (surface.Value >= min && surface.Value <= max)
-                    {
-                        validSurfaces++;
-                    }
-                    else
-                    {
-                        Logger.Debug($"Surface {surface.Value}m² is outside range {min}-{max}m²");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to validate surface for listing");
-            }
-        }
-
-        var isValid = totalSurfaces > 0 && validSurfaces >= (totalSurfaces * 0.8); // Allow 80% tolerance
-        Logger.Info($"Surface validation: {validSurfaces}/{totalSurfaces} surfaces within range");
-        return isValid;
-    }
-
-    private string? ExtractPriceFromListing(IWebElement listing)
-    {
-        var priceSelectors = new[]
-        {
-            By.XPath(".//*[contains(text(),'PLN') or contains(text(),'z?')]"),
-            By.CssSelector("span[class*='price']"),
-            By.CssSelector("div[class*='price']")
-        };
-
-        foreach (var selector in priceSelectors)
-        {
-            try
-            {
-                var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed);
-                if (element != null && !string.IsNullOrEmpty(element.Text))
-                {
-                    return element.Text.Trim();
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
-
-    private int? ParsePriceFromText(string text)
-    {
-        var digits = new string(text.Where(char.IsDigit).ToArray());
-        if (int.TryParse(digits, out var price) && price > 1000)
-        {
-            return price;
-        }
-        return null;
-    }
-
-    public (int? price, double? surface, int? rooms) PickRandomOfferAndOpen()
-    {
-        Logger.Info("Picking random offer and opening details");
-        var listings = GetListingElements().Take(10).ToList();
-        
-        if (!listings.Any())
-        {
-            Logger.Warn("No listings available to pick from");
-            return (null, null, null);
-        }
-
-        var random = new Random();
-        var selectedListing = listings[random.Next(listings.Count)];
-        
-        // Extract data before clicking
-        var price = ParsePriceFromText(ExtractPriceFromListing(selectedListing) ?? "");
-        var surface = ExtractSurfaceFromListing(selectedListing);
-        
-        try
-        {
-            // Find clickable link within the listing
-            var link = selectedListing.FindElement(By.TagName("a"));
-            link.Click();
-            Logger.Info("Clicked on random offer");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to click on offer link");
-        }
-
-        return (price, surface.HasValue ? (double?)surface.Value : null, null);
     }
     #endregion
 }

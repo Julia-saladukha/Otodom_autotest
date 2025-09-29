@@ -4,6 +4,7 @@ using Reqnroll;
 using Autotests_task1.Pages;
 using NLog;
 using OpenQA.Selenium;
+using Autotests_task1.Helpers;
 
 namespace Autotests_task1.Steps;
 
@@ -12,15 +13,24 @@ public class SearchSteps
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly MainPage _mainPage = new();
+    private readonly ResultsPage _resultsPage = new();
+    private readonly OfferDetailsPage _offerDetailsPage = new();
+    private readonly ScenarioContext _scenarioContext;
 
     private const string LocationValue = "Warszawa";
     private const int MinPrice = 200000;
     private const int MaxPrice = 1000000;
+    private const string OfferDataKey = "OfferData";
 
-    [When("I set location 'Warszawa' and price range 200000-1000000 and search")]
-    public void WhenISetLocationWarszawaAndPriceRangeAndSearch()
+    public SearchSteps(ScenarioContext scenarioContext)
     {
-        Logger.Info("Setting location and price range, then performing search");
+        _scenarioContext = scenarioContext;
+    }
+
+    [When("I set location 'Warszawa' and price range 200000-1000000")]
+    public void WhenISetLocationWarszawaAndPriceRange()
+    {
+        Logger.Info("Setting location and price range");
 
         var locationSet = _mainPage.SetLocation(LocationValue);
         locationSet.Should().BeTrue("Location input should be found and value set to Warszawa");
@@ -29,6 +39,12 @@ public class SearchSteps
         var priceSet = _mainPage.SetPriceRange(MinPrice, MaxPrice);
         priceSet.Should().BeTrue("Price range inputs should be found and values entered");
         Logger.Info($"Price range set: {MinPrice}-{MaxPrice}");
+    }
+
+    [When("I click search button")]
+    public void WhenIClickSearchButton()
+    {
+        Logger.Info("Clicking search button");
 
         var clicked = _mainPage.ClickSearchButton();
         if (!clicked)
@@ -36,8 +52,31 @@ public class SearchSteps
             Logger.Warn("Primary search button click failed, trying generic search method");
             clicked = _mainPage.Search();
         }
+        
+        // If MainPage search fails, try ResultsPage search for filters
+        if (!clicked)
+        {
+            Logger.Warn("MainPage search failed, trying ResultsPage search method for filters");
+            try
+            {
+                _resultsPage.Search();
+                clicked = true;
+                Logger.Info("ResultsPage search method executed successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ResultsPage search method also failed");
+            }
+        }
+        
         clicked.Should().BeTrue("Search button should be clicked");
-        Logger.Info("Search initiated");
+        Logger.Info("Search button clicked successfully");
+    }
+
+    [Then("the search results page should be displayed")]
+    public void ThenTheSearchResultsPageShouldBeDisplayed()
+    {
+        Logger.Info("Verifying that search results page is displayed");
 
         // Wait for results navigation (strict)
         var initialUrl = "https://www.otodom.pl/";
@@ -54,7 +93,16 @@ public class SearchSteps
         }, timeout: TimeSpan.FromSeconds(30));
 
         loaded.Should().BeTrue("Results page should load (URL changed or listings visible)");
-        Logger.Info("Results page navigation condition satisfied");
+        Logger.Info("Search results page is displayed successfully");
+    }
+
+    // Keep the original combined step for backward compatibility
+    [When("I set location 'Warszawa' and price range 200000-1000000 and search")]
+    public void WhenISetLocationWarszawaAndPriceRangeAndSearch()
+    {
+        WhenISetLocationWarszawaAndPriceRange();
+        WhenIClickSearchButton();
+        ThenTheSearchResultsPageShouldBeDisplayed();
     }
 
     [Then("I should see the search results for 'Warszawa' within the price range 200000-1000000")]
@@ -151,238 +199,23 @@ public class SearchSteps
         Logger.Info("Detailed search results validation completed");
     }
 
-    // NEW METHOD Analyse and area filter
     [When("I analyze surface area from results and apply surface filter")]
     public void WhenIAnalyzeSurfaceAreaFromResultsAndApplySurfaceFilter()
     {
         Logger.Info("Starting surface area analysis and filter application");
-        var driver = AqualityServices.Browser.Driver;
-
-        // 1. Анализируем результаты первой страницы
-        var (minSurface, maxSurface) = AnalyzeSurfaceAreaFromFirstPage();
+        
+        // Use ResultsPage method to get surface range
+        var (minSurface, maxSurface) = _resultsPage.GetSurfaceRangeFromFirstPage();
         Logger.Info($"Analyzed surface range: {minSurface}m² - {maxSurface}m²");
 
-        // 2. Удаляем фильтры цены
-        ClearPriceFilters();
+        // Clear price filters and set surface filters
+        _resultsPage.ClearPriceFilter();
         Logger.Info("Price filters cleared");
 
-        // 3. Устанавливаем фильтры по площади
-        SetSurfaceFilter(minSurface, maxSurface);
+        _resultsPage.SetSurfaceRange(minSurface, maxSurface);
         Logger.Info($"Surface filter set: {minSurface}m² - {maxSurface}m²");
 
-        // 4. Запускаем новый поиск
-        var clicked = _mainPage.ClickSearchButton();
-        clicked.Should().BeTrue("Search button should be clicked after applying surface filter");
-        
-        // Ждем обновления результатов
-        AqualityServices.ConditionalWait.WaitFor(() =>
-        {
-            try
-            {
-                return driver.FindElements(By.CssSelector("article, div[data-cy*='listing']")).Any(e => e.Displayed);
-            }
-            catch { return false; }
-        }, TimeSpan.FromSeconds(20));
-
-        Logger.Info("Surface filter application completed");
-    }
-
-    private (double minSurface, double maxSurface) AnalyzeSurfaceAreaFromFirstPage()
-    {
-        Logger.Info("Analyzing surface area from first page listings");
-        var driver = AqualityServices.Browser.Driver;
-        var surfaceAreas = new List<double>();
-
-        var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-            .Where(e => e.Displayed)
-            .Take(20) // Анализируем до 20 объявлений
-            .ToList();
-
-        Logger.Info($"Found {listings.Count} listings to analyze for surface area");
-
-        foreach (var listing in listings)
-        {
-            try
-            {
-                // Расширенные селекторы для площади
-                var surfaceSelectors = new[]
-                {
-                    ".//*[contains(text(),'m²') or contains(text(),'m2') or contains(text(),'m ²')]",
-                    ".//*[contains(@aria-label,'Powierzchnia') or contains(@data-cy,'surface')]",
-                    ".//span[contains(text(),'m²') or contains(text(),'m2')]",
-                    ".//div[contains(text(),'m²') or contains(text(),'m2')]", 
-                    ".//p[contains(text(),'m²') or contains(text(),'m2')]",
-                    ".//*[@class*='surface' or @class*='area' or @class*='size']",
-                    ".//*[contains(@title,'m²') or contains(@title,'powierzchnia')]",
-                    ".//*[text()[contains(.,'m²')] or text()[contains(.,'m2')]]"
-                };
-
-                bool foundInListing = false;
-                foreach (var selector in surfaceSelectors)
-                {
-                    try
-                    {
-                        var elements = listing.FindElements(By.XPath(selector));
-                        foreach (var surfaceEl in elements.Where(e => e.Displayed))
-                        {
-                            var surfaceText = surfaceEl.Text?.Trim() ?? string.Empty;
-                            if (string.IsNullOrEmpty(surfaceText)) continue;
-
-                            Logger.Debug($"Found surface text: '{surfaceText}' using selector: {selector}");
-                            
-                            // Улучшенный RegEx для извлечения площади
-                            var patterns = new[]
-                            {
-                                @"(\d+(?:[.,]\d+)?)\s*m[²2]",           // 45.5 m² или 45,5m2
-                                @"(\d+(?:[.,]\d+)?)\s*m\s*²",          // 45 m ²
-                                @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",  // powierzchnia: 45.5
-                                @"(\d+(?:[.,]\d+)?)\s*metr",           // 45.5 metr
-                                @"^(\d+(?:[.,]\d+)?)$"                 // просто число (если в контексте площади)
-                            };
-
-                            foreach (var pattern in patterns)
-                            {
-                                var match = System.Text.RegularExpressions.Regex.Match(surfaceText, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                                if (match.Success)
-                                {
-                                    if (double.TryParse(match.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var surface))
-                                    {
-                                        // Фильтруем разумные значения площади (от 10 до 500 м²)
-                                        if (surface >= 10 && surface <= 500)
-                                        {
-                                            surfaceAreas.Add(surface);
-                                            Logger.Debug($"Extracted surface: {surface}m² from text: '{surfaceText}'");
-                                            foundInListing = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            if (foundInListing) break;
-                        }
-                        if (foundInListing) break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Debug(ex, $"Error with selector {selector}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to extract surface from listing");
-            }
-        }
-
-        Logger.Info($"Successfully extracted {surfaceAreas.Count} surface values: [{string.Join(", ", surfaceAreas.Select(s => $"{s}m²"))}]");
-
-        if (!surfaceAreas.Any())
-        {
-            Logger.Warn("No surface areas found, using default range 40-120m²");
-            return (40.0, 120.0);
-        }
-
-        var minSurface = surfaceAreas.Min();
-        var maxSurface = surfaceAreas.Max();
-
-        // Если найдено мало значений или они одинаковые - расширяем диапазон
-        if (surfaceAreas.Count <= 2 || Math.Abs(maxSurface - minSurface) < 5)
-        {
-            Logger.Warn($"Found only {surfaceAreas.Count} surface value(s) or narrow range. Expanding range for better filtering.");
-            var avgSurface = surfaceAreas.Average();
-            minSurface = Math.Max(10, avgSurface - 20);  // минимум 20m² разброс вниз
-            maxSurface = Math.Min(500, avgSurface + 20); // максимум 20m² разброс вверх
-            Logger.Info($"Expanded range based on average {avgSurface:F1}m²: {minSurface:F1}m² - {maxSurface:F1}m²");
-        }
-        
-        Logger.Info($"Final surface range: {minSurface:F1}m² - {maxSurface:F1}m² (from {surfaceAreas.Count} values)");
-        return (minSurface, maxSurface);
-    }
-
-    private void ClearPriceFilters()
-    {
-        Logger.Info("Clearing price filters");
-        var success = _mainPage.ClearPriceRange();
-        if (!success)
-        {
-            Logger.Warn("Failed to clear price filters using MainPage method, trying direct approach");
-            var driver = AqualityServices.Browser.Driver;
-            try
-            {
-                // Fallback: прямая очистка через селекторы
-                var priceInputs = driver.FindElements(By.CssSelector("input[data-cy*='price'], input[name*='price']"));
-                foreach (var input in priceInputs.Where(i => i.Displayed && i.Enabled))
-                {
-                    input.Clear();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Fallback price clearing also failed");
-            }
-        }
-    }
-
-    private void SetSurfaceFilter(double minSurface, double maxSurface)
-    {
-        Logger.Info($"Setting surface filter: {minSurface}m² - {maxSurface}m²");
-        var success = _mainPage.SetSurfaceRange((int)minSurface, (int)maxSurface);
-        if (!success)
-        {
-            Logger.Warn("Failed to set surface filter using MainPage method, trying direct approach");
-            var driver = AqualityServices.Browser.Driver;
-            try
-            {
-                // Fallback: прямая установка через селекторы
-                var surfaceMinSelectors = new[]
-                {
-                    "input[data-cy='search.form.surface.from']",
-                    "input[name='surfaceMin']",
-                    "input[placeholder*='powierzchnia']"
-                };
-
-                var surfaceMaxSelectors = new[]
-                {
-                    "input[data-cy='search.form.surface.to']",
-                    "input[name='surfaceMax']",
-                    "input[placeholder*='powierzchnia']"
-                };
-
-                foreach (var selector in surfaceMinSelectors)
-                {
-                    try
-                    {
-                        var minInput = driver.FindElement(By.CssSelector(selector));
-                        if (minInput.Displayed && minInput.Enabled)
-                        {
-                            minInput.Clear();
-                            minInput.SendKeys(((int)minSurface).ToString());
-                            break;
-                        }
-                    }
-                    catch { }
-                }
-
-                foreach (var selector in surfaceMaxSelectors)
-                {
-                    try
-                    {
-                        var maxInput = driver.FindElement(By.CssSelector(selector));
-                        if (maxInput.Displayed && maxInput.Enabled)
-                        {
-                            maxInput.Clear();
-                            maxInput.SendKeys(((int)maxSurface).ToString());
-                            break;
-                        }
-                    }
-                    catch { }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Fallback surface filter setting also failed");
-            }
-        }
+        Logger.Info("Surface filter application completed (ready for search)");
     }
 
     [Then("search results should contain apartments with surface area filters applied")]
@@ -438,5 +271,164 @@ public class SearchSteps
         }
 
         Logger.Info("Surface area filter validation completed");
+    }
+
+    [When("I get random offer and save price, number of rooms, and surface to scenario context")]
+    public void WhenIGetRandomOfferAndSavePriceNumberOfRoomsAndSurfaceToScenarioContext()
+    {
+        Logger.Info("Getting random offer and saving its details to scenario context");
+        
+        // Ensure listings are available
+        _resultsPage.WaitForListings(TimeSpan.FromSeconds(10))
+            .Should().BeTrue("Listings should be available before picking random offer");
+
+        // Pick random offer but don't click yet - just get the data
+        var listings = _resultsPage.GetListingElements().Take(10).ToList();
+        
+        if (!listings.Any())
+        {
+            Logger.Warn("No listings available to pick from");
+            return;
+        }
+
+        var random = new Random();
+        var selectedListing = listings[random.Next(listings.Count)];
+        
+        // Extract data from the selected listing
+        var price = _resultsPage.ExtractPriceFromListing(selectedListing);
+        var surface = _resultsPage.ExtractSurfaceFromListing(selectedListing);
+        var rooms = _resultsPage.ExtractRoomsFromListing(selectedListing);
+
+        // Save the selected listing element and its data to scenario context
+        var offerData = new
+        {
+            ListingElement = selectedListing,
+            Price = price,
+            Surface = surface,
+            Rooms = rooms
+        };
+
+        ScenarioContextHelper.Set(_scenarioContext, OfferDataKey, offerData);
+        Logger.Info($"Saved offer data: Price={price}, Surface={surface}m², Rooms={rooms}");
+    }
+
+    [When("I click on the offer")]
+    public void WhenIClickOnTheOffer()
+    {
+        Logger.Info("Clicking on the previously selected offer");
+        
+        var offerData = ScenarioContextHelper.Get<dynamic>(_scenarioContext, OfferDataKey);
+        var selectedListing = (IWebElement)offerData.ListingElement;
+
+        try
+        {
+            // Find clickable link within the listing
+            var link = selectedListing.FindElement(By.TagName("a"));
+            link.Click();
+            Logger.Info("Clicked on the selected offer");
+            
+            // Wait for navigation to offer details page
+            var navigated = AqualityServices.ConditionalWait.WaitFor(() =>
+            {
+                var url = AqualityServices.Browser.CurrentUrl.ToLowerInvariant();
+                return url.Contains("/oferta") || url.Contains("/ad") || url.Contains("/listing") || url.Contains("/offer");
+            }, timeout: TimeSpan.FromSeconds(20));
+
+            navigated.Should().BeTrue("Should navigate to offer details page after clicking");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to click on the offer");
+            throw;
+        }
+    }
+
+    [Then("the offer page should be opened")]
+    public void ThenTheOfferPageShouldBeOpened()
+    {
+        Logger.Info("Verifying that offer page is opened");
+        
+        var currentUrl = AqualityServices.Browser.CurrentUrl.ToLowerInvariant();
+        var isOfferPage = currentUrl.Contains("/oferta") || 
+                         currentUrl.Contains("/ad") || 
+                         currentUrl.Contains("/listing") || 
+                         currentUrl.Contains("/offer");
+
+        isOfferPage.Should().BeTrue($"Should be on offer page, but current URL is: {currentUrl}");
+        
+        // Additional check - verify page contains offer details elements
+        var driver = AqualityServices.Browser.Driver;
+        var hasOfferDetails = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            try
+            {
+                // Look for common offer page elements
+                return driver.FindElements(By.CssSelector("main, .offer-details, [data-cy*='offer'], [data-cy*='ad']")).Any(e => e.Displayed);
+            }
+            catch { return false; }
+        }, TimeSpan.FromSeconds(10));
+
+        hasOfferDetails.Should().BeTrue("Offer page should contain offer details elements");
+        Logger.Info("Offer page is successfully opened");
+    }
+
+    [Then("the price, number of rooms, and surface should be correct")]
+    public void ThenThePriceNumberOfRoomsAndSurfaceShouldBeCorrect()
+    {
+        Logger.Info("Validating that offer details match saved values");
+        
+        var offerData = ScenarioContextHelper.Get<dynamic>(_scenarioContext, OfferDataKey);
+        var savedPrice = offerData.Price as int?;
+        var savedSurface = offerData.Surface as int?;
+        var savedRooms = offerData.Rooms as int?;
+
+        Logger.Info($"Saved values: Price={savedPrice}, Surface={savedSurface}m2, Rooms={savedRooms}");
+
+        try
+        {
+            // Read details from offer page with error handling
+            var (pagePrice, pageSurface, pageRooms) = _offerDetailsPage.ReadDetailsWithFallback();
+            Logger.Info($"Page values: Price={pagePrice}, Surface={pageSurface}m2, Rooms={pageRooms}");
+
+            // Validate price if both values are available
+            if (savedPrice.HasValue && pagePrice.HasValue)
+            {
+                pagePrice.Value.Should().Be(savedPrice.Value, "Price on details page should match saved list value");
+                Logger.Info("Price validation passed");
+            }
+            else
+            {
+                Logger.Warn($"Price comparison skipped - Saved: {savedPrice}, Page: {pagePrice}");
+            }
+
+            // Validate surface with tolerance if both values are available
+            if (savedSurface.HasValue && pageSurface.HasValue)
+            {
+                pageSurface.Value.Should().BeApproximately(savedSurface.Value, 2.0, "Surface should match saved list value within tolerance");
+                Logger.Info("Surface validation passed");
+            }
+            else
+            {
+                Logger.Warn($"Surface comparison skipped - Saved: {savedSurface}, Page: {pageSurface}");
+            }
+
+            // Validate rooms if both values are available
+            if (savedRooms.HasValue && pageRooms.HasValue)
+            {
+                pageRooms.Value.Should().Be(savedRooms.Value, "Rooms count should match saved list value");
+                Logger.Info("Rooms validation passed");
+            }
+            else
+            {
+                Logger.Warn($"Rooms comparison skipped - Saved: {savedRooms}, Page: {pageRooms}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to validate offer details");
+            throw;
+        }
+
+        Logger.Info("Offer details validation completed successfully");
     }
 }
