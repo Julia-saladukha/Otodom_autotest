@@ -5,6 +5,7 @@ using NLog;
 using OpenQA.Selenium;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Autotests_task1.Models;
 
 namespace Autotests_task1.Pages;
 
@@ -521,54 +522,86 @@ public class ResultsPage : BasePage
         Logger.Info($"Setting surface range: {min} - {max} m²");
         var driver = AqualityServices.Browser.Driver;
 
-        // Find and set minimum surface
+        // IMPROVED: Wait for surface inputs to be available with extended timeout
+        var surfaceInputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
+            var maxInput = FindFirstDisplayedElement(driver, _surfaceMaxInputLocators);
+            return minInput != null && maxInput != null && 
+                   IsElementFullyInteractable(minInput) && IsElementFullyInteractable(maxInput);
+        }, TimeSpan.FromSeconds(15));
+
+        if (!surfaceInputsReady)
+        {
+            Logger.Error("Surface input fields never became ready for interaction");
+            return; // Don't throw exception, let caller handle validation
+        }
+
+        // Get fresh element references
         var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
-        if (minInput != null)
-        {
-            try
-            {
-                minInput.Clear();
-                minInput.SendKeys(min.ToString());
-                Logger.Info($"Set minimum surface: {min}m²");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to set minimum surface value");
-            }
-        }
-        else
-        {
-            Logger.Warn("Minimum surface input field not found");
-        }
-
-        // Find and set maximum surface
         var maxInput = FindFirstDisplayedElement(driver, _surfaceMaxInputLocators);
-        if (maxInput != null)
+
+        if (minInput == null || maxInput == null)
         {
-            try
-            {
-                maxInput.Clear();
-                maxInput.SendKeys(max.ToString());
-                Logger.Info($"Set maximum surface: {max}m²");
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to set maximum surface value");
-            }
-        }
-        else
-        {
-            Logger.Warn("Maximum surface input field not found");
+            Logger.Error("Surface input fields not found after waiting");
+            return;
         }
 
-        // Small delay to allow UI to process the input
-        Thread.Sleep(300);
+        // REMOVED try-catch - let errors be visible!
+        Logger.Info("Setting minimum surface...");
+        
+        // Scroll to element and ensure visibility
+        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", minInput);
+        Thread.Sleep(500);
+        
+        minInput.Clear();
+        Thread.Sleep(500);
+        minInput.SendKeys(min.ToString());
+        Logger.Info($"Set minimum surface: {min}m²");
+        Thread.Sleep(500);
+
+        Logger.Info("Setting maximum surface...");
+        
+        // Same for max input
+        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", maxInput);
+        Thread.Sleep(500);
+        
+        maxInput.Clear();
+        Thread.Sleep(500);
+        maxInput.SendKeys(max.ToString());
+        Logger.Info($"Set maximum surface: {max}m²");
+
+        // Extended delay to allow UI to process the input
+        Thread.Sleep(1000);
+        Logger.Info("Surface range set successfully");
     }
 
     public void SetSurfaceRange(double min, double max)
     {
         SetSurfaceRange((int)Math.Round(min), (int)Math.Round(max));
     }
+
+    private bool IsElementFullyInteractable(IWebElement element)
+    {
+        if (element == null) return false;
+        
+        var displayed = element.Displayed;
+        var enabled = element.Enabled;
+        var hasSize = element.Size.Height > 0 && element.Size.Width > 0;
+        
+        // Enhanced checks for true interactability
+        var location = element.Location;
+        var size = element.Size;
+        var inViewport = location.X >= -50 && location.Y >= -50 && size.Width > 5 && size.Height > 5;
+        
+        // Check element is not stale by accessing a property
+        var tagName = element.TagName; // This will throw if element is stale
+        
+        var result = displayed && enabled && hasSize && inViewport;
+        Logger.Debug($"Surface element full interactability: displayed={displayed}, enabled={enabled}, hasSize={hasSize}, inViewport={inViewport} => {result}");
+        return result;
+    }
+    #endregion
 
     public void Search()
     {
@@ -578,18 +611,11 @@ public class ResultsPage : BasePage
         var searchButton = FindFirstDisplayedElement(driver, _searchButtonLocators);
         if (searchButton != null)
         {
-            try
-            {
-                searchButton.Click();
-                Logger.Info("Search button clicked successfully");
-                
-                // Wait for search to complete
-                Thread.Sleep(1000);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to click search button");
-            }
+            searchButton.Click();
+            Logger.Info("Search button clicked successfully");
+            
+            // Wait for search to complete
+            Thread.Sleep(1000);
         }
         else
         {
@@ -601,21 +627,72 @@ public class ResultsPage : BasePage
     {
         foreach (var locator in locators)
         {
-            try
+            var element = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
+            if (element != null)
             {
-                var element = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
-                if (element != null)
-                {
-                    Logger.Debug($"Found element using locator: {locator}");
-                    return element;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, $"Failed to find element with locator: {locator}");
+                Logger.Debug($"Found element using locator: {locator}");
+                return element;
             }
         }
         return null;
     }
-    #endregion
+
+    public List<ListingData> GetAllListingsData()
+    {
+        Logger.Info("Collecting data from all listings on the current page");
+        
+        var listings = GetListingElements();
+        var listingsData = new List<ListingData>();
+        
+        for (int i = 0; i < listings.Count; i++)
+        {
+            var listing = listings[i];
+            var listingData = new ListingData
+            {
+                Index = i + 1,
+                Element = listing,
+                Price = ExtractPriceFromListing(listing),
+                Surface = ExtractSurfaceFromListing(listing),
+                Rooms = ExtractRoomsFromListing(listing),
+                Title = ExtractTitleFromListing(listing)
+            };
+            
+            listingsData.Add(listingData);
+            
+            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}m², Rooms={listingData.Rooms}, Title='{listingData.Title}'");
+        }
+        
+        Logger.Info($"Collected data from {listingsData.Count} listings");
+        return listingsData;
+    }
+
+    public string? ExtractTitleFromListing(IWebElement listing)
+    {
+        var titleSelectors = new[]
+        {
+            By.CssSelector("h2"),
+            By.CssSelector("h3"),
+            By.CssSelector("a[title]"),
+            By.CssSelector("a[data-cy*='title']"),
+            By.CssSelector("span[data-cy*='title']"),
+            By.CssSelector(".listing-title"),
+            By.CssSelector("[class*='title']")
+        };
+
+        foreach (var selector in titleSelectors)
+        {
+            var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
+            if (element != null)
+            {
+                var title = element.Text?.Trim();
+                if (!string.IsNullOrEmpty(title))
+                {
+                    Logger.Debug($"Found title using selector {selector}: '{title}'");
+                    return title;
+                }
+            }
+        }
+        
+        return null;
+    }
 }
