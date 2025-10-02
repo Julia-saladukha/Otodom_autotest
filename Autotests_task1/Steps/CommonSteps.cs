@@ -2,6 +2,7 @@ using Aquality.Selenium.Browsers;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
+using Autotests_task1.Helpers;
 using NLog;
 using OpenQA.Selenium;
 
@@ -15,9 +16,9 @@ public class CommonSteps
     private readonly MainPage _mainPage = new();
     private readonly LoginPage _loginPage = new();
 
-    // NOTE: Credentials supplied explicitly per user request. In real projects use secure secrets storage.
-    private const string UserEmail = "vopav47202@noidem.com";
-    private const string UserPassword = ":6357A3pVLJ*";
+    // Credentials are now loaded from appsettings.secrets.json via ConfigHelper
+    private static string UserEmail => ConfigHelper.GetUsername();
+    private static string UserPassword => ConfigHelper.GetPassword();
 
     [When("I open Otodom main page")]
     [Given("I open Otodom main page")]
@@ -58,7 +59,28 @@ public class CommonSteps
     [When("I authorize user")]
     public void AuthorizeUser()
     {
-        Logger.Info("Attempting user authorization (best-effort)");
+        Logger.Info("Attempting user authorization (reading credentials from configuration)");
+        
+        // Verify credentials are available before attempting login
+        try
+        {
+            var username = UserEmail; // This will throw if config is invalid
+            var password = UserPassword; // This will throw if config is invalid
+            
+            // Log masked username for debugging (first 2 chars + *** + domain)
+            var maskedUsername = username.Contains('@') 
+                ? $"{username.Substring(0, Math.Min(2, username.IndexOf('@')))}{new string('*', Math.Max(0, username.IndexOf('@') - 2))}@{username.Split('@')[1]}"
+                : "***";
+            Logger.Info($"Credentials loaded successfully for user: {maskedUsername}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to load credentials from configuration");
+            throw new InvalidOperationException(
+                "Cannot proceed with authorization - credentials not available. " +
+                "Please ensure appsettings.secrets.json exists and contains valid credentials.", ex);
+        }
+        
         var opened = _mainPage.OpenLogin();
         if (!opened)
         {
@@ -91,7 +113,9 @@ public class CommonSteps
 
         try
         {
+            Logger.Info("Submitting login credentials from configuration");
             _loginPage.Login(UserEmail, UserPassword);
+            Logger.Info("Login credentials submitted successfully");
         }
         catch (Exception ex)
         {
