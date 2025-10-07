@@ -5,7 +5,6 @@ using NLog;
 namespace Autotests_task1.Pages;
 
 /// <summary>
-/// MainPage without try-catch blocks and minimal JavaScript - handles dynamic content properly
 /// </summary>
 public class MainPage : BasePage
 {
@@ -15,33 +14,23 @@ public class MainPage : BasePage
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }
 
     private readonly By[] _locationInputs = {
-        By.CssSelector("input[data-cy='search.form.location.button']"),
-        By.CssSelector("input[placeholder*='lokalizac']"),
-        By.CssSelector("input[name='location']")
+        By.XPath("//input[@data-cy='search.form.location.button']")
     };
 
     private readonly By[] _priceFromInputs = {
-        By.CssSelector("input[data-cy='search.form.price.from']"),
-        By.CssSelector("input[name='priceMin']"),
-        By.Id("priceFrom")
+        By.CssSelector("input[data-cy='search-form--field--priceMin']")
     };
 
     private readonly By[] _priceToInputs = {
-        By.CssSelector("input[data-cy='search.form.price.to']"),
-        By.CssSelector("input[name='priceMax']"),
-        By.Id("priceTo")
+        By.CssSelector("input[data-cy='search-form--field--priceMax']"),
     };
 
     private readonly By[] _searchButtons = {
-        By.Id("search-form-submit"),
-        By.CssSelector("button[type='submit']"),
-        By.XPath("//button[contains(.,'Szukaj')]")
+        By.CssSelector("button[data-cy='search.submit-form.results']")
     };
 
     private readonly By[] _loginLocators = {
-        By.CssSelector("a[data-cy='header-login-button']"),
-        By.XPath("//a[contains(normalize-space(.),'Moje konto')]"),
-        By.XPath("//button[contains(.,'Moje konto') or contains(.,'Zaloguj') or contains(.,'Log in')]")
+        By.XPath("//button[@data-cy='navbar-my-account-button']")
     };
 
     public void Open()
@@ -103,12 +92,15 @@ public class MainPage : BasePage
         Thread.Sleep(500);
         input.Clear();
         input.SendKeys(location);
-        
+
         // Wait for suggestions
-        Thread.Sleep(2000);
+        AqualityServices.ConditionalWait.WaitFor(() =>
+    AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']")).Any(e => e.Displayed),
+    TimeSpan.FromSeconds(3));
+
         var suggestion = AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']"))
             .FirstOrDefault(e => e.Displayed);
-        
+
         if (suggestion != null)
         {
             suggestion.Click();
@@ -126,41 +118,14 @@ public class MainPage : BasePage
                 Logger.Info("Successfully clicked on logo");
                 Thread.Sleep(1000); // Allow page to process logo click
             }
-            else
-            {
-                // Try alternative logo selectors
-                var altLogoSelectors = new By[] {
-                    By.CssSelector("img[alt*='Otodom']"),
-                    By.CssSelector("img[src*='otodom_logo']"),
-                    By.CssSelector("a[href='/']"),
-                    By.XPath("//img[@alt='Id? do strony g?ównej']")
-                };
-                
-                foreach (var selector in altLogoSelectors)
-                {
-                    var altLogo = driver.FindElements(selector).FirstOrDefault(e => e.Displayed);
-                    if (altLogo != null)
-                    {
-                        Logger.Info($"Clicking alternative logo using selector: {selector}");
-                        altLogo.Click();
-                        Logger.Info("Successfully clicked on alternative logo");
-                        Thread.Sleep(1000);
-                        break;
-                    }
-                }
-            }
-            
-            // CRITICAL FIX: Extended wait for form stabilization
-            Logger.Info("Waiting for form to stabilize after location selection...");
-            Thread.Sleep(8000); // INCREASED from 5 to 8 seconds
-            
+                      
             // Additional readiness check with extended timeout
             var formReady = AqualityServices.ConditionalWait.WaitFor(() => 
             {
                 var minInput = FindFirstDisplayedElement(_priceFromInputs);
                 if (minInput == null) return false;
                 return IsElementFullyInteractable(minInput);
-            }, TimeSpan.FromSeconds(20)); // INCREASED timeout
+            }, TimeSpan.FromSeconds(5)); // INCREASED timeout
             
             Logger.Info($"Form readiness after location selection: {formReady}");
         }

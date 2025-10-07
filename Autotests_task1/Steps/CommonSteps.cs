@@ -27,7 +27,7 @@ public class CommonSteps
         Logger.Info("Opening Otodom main page");
         if (AqualityServices.IsBrowserStarted)
         {
-            AqualityServices.Browser.Driver.Manage().Cookies.DeleteAllCookies();
+         // AqualityServices.Browser.Driver.Manage().Cookies.DeleteAllCookies();
         }
         _mainPage.Open();
         _mainPage.WaitUntilLoaded().Should().BeTrue("Main page should load successfully");
@@ -88,15 +88,20 @@ public class CommonSteps
             return; // proceed unauthenticated
         }
 
-        // Wait for either redirect to login domain or presence of login form fields
+        // Wait for either redirect to login domain or presence of login form fields (mandatory)
         bool onLogin = AqualityServices.ConditionalWait.WaitFor(() =>
             AqualityServices.Browser.CurrentUrl.Contains("login.otodom.pl") ||
             AqualityServices.Browser.Driver.FindElements(By.Id("username")).Any(), timeout: TimeSpan.FromSeconds(10));
 
         if (!onLogin)
         {
-            Logger.Warn("Did not reach login page/form. Continuing without authenticating.");
-            return;
+            var currentUrl = AqualityServices.Browser.CurrentUrl;
+            Logger.Error($"Login page did not load within timeout. Current URL: {currentUrl}");
+            throw new Exception("Login page was not reached: no redirect to login.otodom.pl and username field not found within 10 seconds.");
+        }
+        else
+        {
+            Logger.Info("Login page detected (redirect to login.otodom.pl or username field present)");
         }
 
         // If already authenticated (redirected back quickly) just exit
