@@ -122,11 +122,11 @@ namespace Autotests_task1.Features
     And I click search button
     Then the search results page should be displayed
     And the search results should be valid
-    #And search results should contain apartments with surface area filters applied
-    #When I get random offer and save price, number of rooms, and surface to scenario context
-    #And I click on the offer
-    #Then the offer page should be opened
-    #And the price, number of rooms, and surface should be correct
+    And search results should contain apartments with surface area filters applied
+    When I get random offer and save price, number of rooms, and surface to scenario context
+    And I click on the offer
+    Then the offer page should be opened
+    And the price, number of rooms, and surface should be correct
 ", global::Io.Cucumber.Messages.Types.SourceMediaType.TEXT_X_CUCUMBER_GHERKIN_PLAIN);
         }
         
@@ -135,52 +135,62 @@ namespace Autotests_task1.Features
             return new global::Io.Cucumber.Messages.Types.GherkinDocument("Features/SearchApartment.feature", new global::Io.Cucumber.Messages.Types.Feature(new global::Io.Cucumber.Messages.Types.Location(1, new System.Nullable<long>(1)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "en-US", "Feature", "Search apartments on Otodom", "  As a user\r\n  I want to open the site and authorize\r\n  So that I can verify acce" +
                         "ss to my account", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.FeatureChild>(new global::Io.Cucumber.Messages.Types.FeatureChild[] {
                                 new global::Io.Cucumber.Messages.Types.FeatureChild(null, null, new global::Io.Cucumber.Messages.Types.Scenario(new global::Io.Cucumber.Messages.Types.Location(6, new System.Nullable<long>(3)), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Tag>(new global::Io.Cucumber.Messages.Types.Tag[0]), "Scenario", "Open main page, authorize user and search with filters", "", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Step>(new global::Io.Cucumber.Messages.Types.Step[] {
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(7, new System.Nullable<long>(5)), "Given ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONTEXT, "I open Otodom main page", null, null, "ccfc87f71be05b5ba4f699a1ad6e65a5"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(8, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I accept cookies if popup appears", null, null, "63558e9005dc2057ab9f8b8e35e943d9"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(9, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I authorize user", null, null, "c161f46a84d0a2588c6d0abb93453af9"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(10, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I set location \'Warszawa\' and price range 200000-1000000 and search", null, null, "bff908313ece535986946e387a1f00a9"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(7, new System.Nullable<long>(5)), "Given ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONTEXT, "I open Otodom main page", null, null, "07b78ea5bb491f548d5bb417cf634c76"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(8, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I accept cookies if popup appears", null, null, "d1b64040bb0da755af105e4fbdef7f26"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(9, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I authorize user", null, null, "88033d7b2ea8825489ebbe381ffe8b87"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(10, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I set location \'Warszawa\' and price range 200000-1000000 and search", null, null, "05c76dcfb6b0795c9544d4b8a5c647ba"),
                                                     new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(11, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "I should see the search results for \'Warszawa\' within the price range 200000-1000" +
-                                                            "000", null, null, "e6ef67002b0caf598e713c5b2ebc0b92"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(12, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "the search results should be valid", null, null, "fdc2dd1aa1dda956ba683142d6b1c91d"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(13, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I analyze surface area from results and apply surface filter", null, null, "84f1c1c2689aec5c828297fd5c71ce2d"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(14, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I click search button", null, null, "53b071ba7414df5caae46ca545c9338d"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(15, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "the search results page should be displayed", null, null, "8692b9dd0b5a0a5ba95693d4775cb43d"),
-                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(16, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "the search results should be valid", null, null, "c59127e096b30c5799e6f4da6fa96245")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Examples>(new global::Io.Cucumber.Messages.Types.Examples[0]), "50564e68ae9a5155b8bc543945699fc6"))})), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Comment>(new global::Io.Cucumber.Messages.Types.Comment[] {
-                            new global::Io.Cucumber.Messages.Types.Comment(new global::Io.Cucumber.Messages.Types.Location(17, new System.Nullable<long>(1)), "    #And search results should contain apartments with surface area filters appli" +
-                                    "ed"),
-                            new global::Io.Cucumber.Messages.Types.Comment(new global::Io.Cucumber.Messages.Types.Location(18, new System.Nullable<long>(1)), "    #When I get random offer and save price, number of rooms, and surface to scen" +
-                                    "ario context"),
-                            new global::Io.Cucumber.Messages.Types.Comment(new global::Io.Cucumber.Messages.Types.Location(19, new System.Nullable<long>(1)), "    #And I click on the offer"),
-                            new global::Io.Cucumber.Messages.Types.Comment(new global::Io.Cucumber.Messages.Types.Location(20, new System.Nullable<long>(1)), "    #Then the offer page should be opened"),
-                            new global::Io.Cucumber.Messages.Types.Comment(new global::Io.Cucumber.Messages.Types.Location(21, new System.Nullable<long>(1)), "    #And the price, number of rooms, and surface should be correct")}));
+                                                            "000", null, null, "3f1b9140c627a35a99ef7ff2e9225860"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(12, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "the search results should be valid", null, null, "f86d3dd09bad825fabf7face34e5d91b"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(13, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I analyze surface area from results and apply surface filter", null, null, "6c82dea31c5c0954b64ec4ac6b50a91b"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(14, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I click search button", null, null, "6808d9fdc033bb5bbb8153e2718ac4ff"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(15, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "the search results page should be displayed", null, null, "d33107ec8eca9f5cbc7f1f5923a72a56"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(16, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "the search results should be valid", null, null, "8c0add5936330554a260dc258827b9ee"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(17, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "search results should contain apartments with surface area filters applied", null, null, "91866dfa9c27e054aec4ae336becb4e8"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(18, new System.Nullable<long>(5)), "When ", global::Io.Cucumber.Messages.Types.StepKeywordType.ACTION, "I get random offer and save price, number of rooms, and surface to scenario conte" +
+                                                            "xt", null, null, "f1725c18b078255da8c884a519d782e1"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(19, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "I click on the offer", null, null, "0c2a7f4e29e41e5b9ef68cad90cd2571"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(20, new System.Nullable<long>(5)), "Then ", global::Io.Cucumber.Messages.Types.StepKeywordType.OUTCOME, "the offer page should be opened", null, null, "75e3f6542240645fa10508891ff4d898"),
+                                                    new global::Io.Cucumber.Messages.Types.Step(new global::Io.Cucumber.Messages.Types.Location(21, new System.Nullable<long>(5)), "And ", global::Io.Cucumber.Messages.Types.StepKeywordType.CONJUNCTION, "the price, number of rooms, and surface should be correct", null, null, "1627e04bc5e7b353be2ae09151880f41")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Examples>(new global::Io.Cucumber.Messages.Types.Examples[0]), "12c45d75d6d24357964eadfd8ade5cdf"))})), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Comment>(new global::Io.Cucumber.Messages.Types.Comment[0]));
         }
         
         private static global::System.Collections.Generic.IEnumerable<Io.Cucumber.Messages.Types.Pickle> PicklesFunc()
         {
             return new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.Pickle>(new global::Io.Cucumber.Messages.Types.Pickle[] {
-                        new global::Io.Cucumber.Messages.Types.Pickle("73e0526f8bb3195c9e074c83179f8154", "Features/SearchApartment.feature", "Open main page, authorize user and search with filters", "en-US", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleStep>(new global::Io.Cucumber.Messages.Types.PickleStep[] {
+                        new global::Io.Cucumber.Messages.Types.Pickle("a4763ebf9fbea95f97e7d9f3cf7edc9b", "Features/SearchApartment.feature", "Open main page, authorize user and search with filters", "en-US", new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleStep>(new global::Io.Cucumber.Messages.Types.PickleStep[] {
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "ccfc87f71be05b5ba4f699a1ad6e65a5"}), "c38bd80ffa036f5bbc99eeacd958b9c3", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I open Otodom main page"),
+                                                        "07b78ea5bb491f548d5bb417cf634c76"}), "47c34e61c0174a569054729e3a843f1c", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I open Otodom main page"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "63558e9005dc2057ab9f8b8e35e943d9"}), "fe265e08a2126b518cb0a304c712e8a3", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I accept cookies if popup appears"),
+                                                        "d1b64040bb0da755af105e4fbdef7f26"}), "60c4e325b1551750a93a7cd5ea33fb48", global::Io.Cucumber.Messages.Types.PickleStepType.CONTEXT, "I accept cookies if popup appears"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "c161f46a84d0a2588c6d0abb93453af9"}), "1fd66b3063576151af3f8fb5cc38e54b", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I authorize user"),
+                                                        "88033d7b2ea8825489ebbe381ffe8b87"}), "d688fab4b3e7975398f8996a5796d22f", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I authorize user"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "bff908313ece535986946e387a1f00a9"}), "fd15d7aeeac9cb55ab0511b987c05dba", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I set location \'Warszawa\' and price range 200000-1000000 and search"),
+                                                        "05c76dcfb6b0795c9544d4b8a5c647ba"}), "6bbad9befd5c615a8cd8dedbab69c9b1", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I set location \'Warszawa\' and price range 200000-1000000 and search"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "e6ef67002b0caf598e713c5b2ebc0b92"}), "2c534f3cdb52ca5bac9be79bfe05462c", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "I should see the search results for \'Warszawa\' within the price range 200000-1000" +
+                                                        "3f1b9140c627a35a99ef7ff2e9225860"}), "97b855fd88b03853a53ead3336ae6362", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "I should see the search results for \'Warszawa\' within the price range 200000-1000" +
                                                 "000"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "fdc2dd1aa1dda956ba683142d6b1c91d"}), "674a4d2fd30b86528035f6e2be95ce0e", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results should be valid"),
+                                                        "f86d3dd09bad825fabf7face34e5d91b"}), "275c7cc336a4f25d891ac6d8879646d8", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results should be valid"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "84f1c1c2689aec5c828297fd5c71ce2d"}), "cda8d1624bec755187ae17e448af2864", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I analyze surface area from results and apply surface filter"),
+                                                        "6c82dea31c5c0954b64ec4ac6b50a91b"}), "40678d302b1fe454a2ae75417aaf6620", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I analyze surface area from results and apply surface filter"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "53b071ba7414df5caae46ca545c9338d"}), "01378ac47f10da528357a2e240c26111", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I click search button"),
+                                                        "6808d9fdc033bb5bbb8153e2718ac4ff"}), "547f7ddf4def8956b629829c94509d79", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I click search button"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "8692b9dd0b5a0a5ba95693d4775cb43d"}), "6530d090ecd3df569ff7bb2d97479afd", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results page should be displayed"),
+                                                        "d33107ec8eca9f5cbc7f1f5923a72a56"}), "8a957da577e55f558c859ce938480959", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results page should be displayed"),
                                         new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
-                                                        "c59127e096b30c5799e6f4da6fa96245"}), "2cca791b9d1dc753b4bc0e3d0457c017", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results should be valid")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleTag>(new global::Io.Cucumber.Messages.Types.PickleTag[0]), new System.Collections.Generic.List<string>(new string[] {
-                                        "50564e68ae9a5155b8bc543945699fc6"}))});
+                                                        "8c0add5936330554a260dc258827b9ee"}), "7684ede28dfbe55281ab512fa64959d2", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the search results should be valid"),
+                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
+                                                        "91866dfa9c27e054aec4ae336becb4e8"}), "a00446cf06b5f456a0c140fc2b444463", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "search results should contain apartments with surface area filters applied"),
+                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
+                                                        "f1725c18b078255da8c884a519d782e1"}), "03f69e09d3968155bdd56bb123f51f5f", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I get random offer and save price, number of rooms, and surface to scenario conte" +
+                                                "xt"),
+                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
+                                                        "0c2a7f4e29e41e5b9ef68cad90cd2571"}), "49378e7c5ab7d255a9734d114166533c", global::Io.Cucumber.Messages.Types.PickleStepType.ACTION, "I click on the offer"),
+                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
+                                                        "75e3f6542240645fa10508891ff4d898"}), "26bea75ffdfca451a7e255a308ca9db9", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the offer page should be opened"),
+                                        new global::Io.Cucumber.Messages.Types.PickleStep(null, new System.Collections.Generic.List<string>(new string[] {
+                                                        "1627e04bc5e7b353be2ae09151880f41"}), "4a0d28525e4c2450be7964a3ef0f7c49", global::Io.Cucumber.Messages.Types.PickleStepType.OUTCOME, "the price, number of rooms, and surface should be correct")}), new System.Collections.Generic.List<global::Io.Cucumber.Messages.Types.PickleTag>(new global::Io.Cucumber.Messages.Types.PickleTag[0]), new System.Collections.Generic.List<string>(new string[] {
+                                        "12c45d75d6d24357964eadfd8ade5cdf"}))});
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
@@ -238,6 +248,22 @@ namespace Autotests_task1.Features
 #line hidden
 #line 16
     await testRunner.AndAsync("the search results should be valid", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 17
+    await testRunner.AndAsync("search results should contain apartments with surface area filters applied", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 18
+    await testRunner.WhenAsync("I get random offer and save price, number of rooms, and surface to scenario conte" +
+                        "xt", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 19
+    await testRunner.AndAsync("I click on the offer", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 20
+    await testRunner.ThenAsync("the offer page should be opened", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 21
+    await testRunner.AndAsync("the price, number of rooms, and surface should be correct", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

@@ -14,8 +14,8 @@ Feature: Search apartments on Otodom
     And I click search button
     Then the search results page should be displayed
     And the search results should be valid
-    #And search results should contain apartments with surface area filters applied
-    #When I get random offer and save price, number of rooms, and surface to scenario context
-    #And I click on the offer
-    #Then the offer page should be opened
-    #And the price, number of rooms, and surface should be correct
+    And search results should contain apartments with surface area filters applied
+    When I get random offer and save price, number of rooms, and surface to scenario context
+    And I click on the offer
+    Then the offer page should be opened
+    And the price, number of rooms, and surface should be correct
