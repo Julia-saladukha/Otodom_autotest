@@ -1,7 +1,7 @@
 using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Elements;
 using Aquality.Selenium.Elements.Interfaces;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -11,7 +11,7 @@ namespace Autotests_task1.Pages;
 
 public class ResultsPage : BasePage
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(5);
 
@@ -113,7 +113,7 @@ public class ResultsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Failed to find listings with locator: {locator}");
+                Logger.Debug($"Failed to find listings with locator {locator}: {ex.Message}");
             }
         }
         return new List<IWebElement>();
@@ -145,18 +145,18 @@ public class ResultsPage : BasePage
                 if (surfaceValue.HasValue)
                 {
                     surfaceValues.Add(surfaceValue.Value);
-                    Logger.Debug($"Extracted surface: {surfaceValue}m²");
+                    Logger.Debug($"Extracted surface: {surfaceValue}m?");
                 }
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, "Failed to extract surface from listing");
+                Logger.Debug($"Failed to extract surface from listing: {ex.Message}");
             }
         }
 
         if (!surfaceValues.Any())
         {
-            Logger.Warn("No surface values found, using default range 40-120m²");
+            Logger.Warn("No surface values found, using default range 40-120m?");
             return (40, 120);
         }
 
@@ -166,13 +166,13 @@ public class ResultsPage : BasePage
         // Ensure reasonable range - expand if too narrow
         if (maxSurface - minSurface < 10)
         {
-            Logger.Warn("Surface range too narrow, expanding by ±10m²");
+            Logger.Warn("Surface range too narrow, expanding by ?10m?");
             var avg = (minSurface + maxSurface) / 2;
             minSurface = Math.Max(10, avg - 10);
             maxSurface = Math.Min(500, avg + 10);
         }
 
-        Logger.Info($"Surface range determined from {surfaceValues.Count} values: Min = {minSurface}m², Max = {maxSurface}m²");
+        Logger.Info($"Surface range determined from {surfaceValues.Count} values: Min = {minSurface}m?, Max = {maxSurface}m?");
         return (minSurface, maxSurface);
     }
 
@@ -197,14 +197,14 @@ public class ResultsPage : BasePage
                     var surface = ParseSurfaceFromText(text);
                     if (surface.HasValue)
                     {
-                        Logger.Debug($"Found surface text: '{text}' -> {surface}m²");
+                        Logger.Debug($"Found surface text: '{text}' -> {surface}m?");
                         return surface;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Error with surface locator: {locator}");
+                Logger.Debug($"Error with surface locator {locator}: {ex.Message}");
             }
         }
         return null;
@@ -251,7 +251,7 @@ public class ResultsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Error with rooms selector: {selector}");
+                Logger.Debug($"Error with rooms selector {selector}: {ex.Message}");
             }
         }
         return null;
@@ -378,7 +378,7 @@ public class ResultsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, "Failed to validate price for listing");
+                Logger.Debug($"Failed to validate price for listing: {ex.Message}");
             }
         }
 
@@ -389,7 +389,7 @@ public class ResultsPage : BasePage
 
     public bool AreAllSurfacesWithinRange(double min, double max)
     {
-        Logger.Info($"Validating all surfaces are within range {min} - {max}m²");
+        Logger.Info($"Validating all surfaces are within range {min} - {max}m?");
         var listings = GetListingElements().Take(15).ToList();
         int validSurfaces = 0;
         int totalSurfaces = 0;
@@ -408,13 +408,13 @@ public class ResultsPage : BasePage
                     }
                     else
                     {
-                        Logger.Debug($"Surface {surface.Value}m² is outside range {min}-{max}m²");
+                        Logger.Debug($"Surface {surface.Value}m? is outside range {min}-{max}m?");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, "Failed to validate surface for listing");
+                Logger.Debug($"Failed to validate surface for listing: {ex.Message}");
             }
         }
 
@@ -451,7 +451,7 @@ public class ResultsPage : BasePage
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to click on offer link");
+            Logger.Warn($"Failed to click on offer link: {ex.Message}");
         }
 
         return (price, surface.HasValue ? (double?)surface.Value : null, rooms);
@@ -481,7 +481,7 @@ public class ResultsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Failed to click clear button with locator: {locator}");
+                Logger.Debug($"Failed to click clear button with locator {locator}: {ex.Message}");
             }
         }
 
@@ -501,7 +501,7 @@ public class ResultsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Failed to clear price input fields");
+                Logger.Warn($"Failed to clear price input fields: {ex.Message}");
             }
         }
 
@@ -519,7 +519,7 @@ public class ResultsPage : BasePage
 
     public void SetSurfaceRange(int min, int max)
     {
-        Logger.Info($"Setting surface range: {min} - {max} m²");
+        Logger.Info($"Setting surface range: {min} - {max} m?");
         var driver = AqualityServices.Browser.Driver;
 
         // IMPROVED: Wait for surface inputs to be available with extended timeout
@@ -557,7 +557,7 @@ public class ResultsPage : BasePage
         minInput.Clear();
         Thread.Sleep(500);
         minInput.SendKeys(min.ToString());
-        Logger.Info($"Set minimum surface: {min}m²");
+        Logger.Info($"Set minimum surface: {min}m?");
         Thread.Sleep(500);
 
         Logger.Info("Setting maximum surface...");
@@ -569,7 +569,7 @@ public class ResultsPage : BasePage
         maxInput.Clear();
         Thread.Sleep(500);
         maxInput.SendKeys(max.ToString());
-        Logger.Info($"Set maximum surface: {max}m²");
+        Logger.Info($"Set maximum surface: {max}m?");
 
         // Extended delay to allow UI to process the input
         Thread.Sleep(1000);
@@ -659,7 +659,7 @@ public class ResultsPage : BasePage
             
             listingsData.Add(listingData);
             
-            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}m², Rooms={listingData.Rooms}, Title='{listingData.Title}'");
+            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}m?, Rooms={listingData.Rooms}, Title='{listingData.Title}'");
         }
         
         Logger.Info($"Collected data from {listingsData.Count} listings");

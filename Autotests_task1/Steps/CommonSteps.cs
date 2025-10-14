@@ -1,9 +1,9 @@
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Core.Logging;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
 using Autotests_task1.Helpers;
-using NLog;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Steps;
@@ -11,7 +11,7 @@ namespace Autotests_task1.Steps;
 [Binding]
 public class CommonSteps
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
 
     private readonly MainPage _mainPage = new();
     private readonly LoginPage _loginPage = new();
@@ -75,7 +75,7 @@ public class CommonSteps
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to load credentials from configuration");
+            Logger.Error($"Failed to load credentials from configuration: {ex.Message}");
             throw new InvalidOperationException(
                 "Cannot proceed with authorization - credentials not available. " +
                 "Please ensure appsettings.secrets.json exists and contains valid credentials.", ex);
@@ -124,7 +124,7 @@ public class CommonSteps
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Login submission failed. Proceeding without asserting authentication.");
+            Logger.Warn($"Login submission failed. Proceeding without asserting authentication: {ex.Message}");
             return;
         }
 

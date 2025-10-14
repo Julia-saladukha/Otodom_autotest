@@ -1,7 +1,7 @@
 using Autotests_task1.Pages;
 using Autotests_task1.Models;
 using Aquality.Selenium.Browsers;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Examples;
@@ -11,7 +11,7 @@ namespace Autotests_task1.Examples;
 /// </summary>
 public class OfferValidationExample
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
 
     public static void RunExample()
     {

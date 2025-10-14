@@ -1,8 +1,8 @@
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Core.Logging;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
-using NLog;
 using Autotests_task1.Helpers;
 using OpenQA.Selenium;
 
@@ -11,7 +11,7 @@ namespace Autotests_task1.Steps;
 [Binding]
 public class SurfaceFilterSteps
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private readonly ResultsPage _resultsPage = new();
     private readonly ScenarioContext _scenarioContext;
 
@@ -50,7 +50,7 @@ public class SurfaceFilterSteps
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Could not save to scenario context, continuing without it");
+            Logger.Debug($"Could not save to scenario context, continuing without it: {ex.Message}");
         }
 
         // Step 2: Clear existing price filters
@@ -105,7 +105,7 @@ public class SurfaceFilterSteps
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Could not retrieve surface range from scenario context, analyzing current page");
+            Logger.Warn($"Could not retrieve surface range from scenario context, analyzing current page: {ex.Message}");
             var currentRange = _resultsPage.GetMinAndMaxSurfaceFromFirstPage();
             minSurface = currentRange.min;
             maxSurface = currentRange.max;
@@ -154,7 +154,7 @@ public class SurfaceFilterSteps
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to check surface filter inputs");
+            Logger.Warn($"Failed to check surface filter inputs: {ex.Message}");
         }
 
         // Validate URL contains surface parameters

@@ -1,13 +1,13 @@
 using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Forms;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Pages;
 
 public abstract class BasePage : Form
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
 
     protected BasePage(By locator, string name) : base(locator, name) {}
 
@@ -49,7 +49,7 @@ public abstract class BasePage : Form
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn(ex, "Standard click failed for cookie button, trying JS");
+                    Logger.Warn($"Standard click failed for cookie button, trying JS: {ex.Message}");
                     try
                     {
                         ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", btn);
@@ -57,14 +57,14 @@ public abstract class BasePage : Form
                     }
                     catch (Exception jsEx)
                     {
-                        Logger.Error(jsEx, "Failed to click cookie button via JS");
+                        Logger.Error($"Failed to click cookie button via JS: {jsEx.Message}");
                     }
                 }
             }
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Error while attempting to close cookie popup (ignored)");
+            Logger.Debug($"Error while attempting to close cookie popup (ignored): {ex.Message}");
         }
     }
 
@@ -89,7 +89,7 @@ public abstract class BasePage : Form
                     }
                     catch (Exception ex)
                     {
-                        Logger.Warn(ex, "Standard click on survey/overlay close failed, trying JS");
+                        Logger.Warn($"Standard click on survey/overlay close failed, trying JS: {ex.Message}");
                         try
                         {
                             ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", closeBtn);
@@ -97,7 +97,7 @@ public abstract class BasePage : Form
                         }
                         catch (Exception jsEx)
                         {
-                            Logger.Error(jsEx, "Failed to close survey popup via JS");
+                            Logger.Error($"Failed to close survey popup via JS: {jsEx.Message}");
                         }
                     }
                     // Continue to attempt closing additional popups if present.
@@ -108,13 +108,13 @@ public abstract class BasePage : Form
                 }
                 catch (Exception innerEx)
                 {
-                    Logger.Debug(innerEx, $"Selector iteration issue for {by}");
+                    Logger.Debug($"Selector iteration issue for {by}: {innerEx.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Error while attempting to close survey popup (ignored)");
+            Logger.Debug($"Error while attempting to close survey popup (ignored): {ex.Message}");
         }
     }
 
@@ -128,7 +128,7 @@ public abstract class BasePage : Form
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Popup handling failed, continuing");
+            Logger.Debug($"Popup handling failed, continuing: {ex.Message}");
         }
     }
 }

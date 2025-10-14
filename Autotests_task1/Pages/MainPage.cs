@@ -1,14 +1,15 @@
 using Aquality.Selenium.Browsers;
 using OpenQA.Selenium;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 
 namespace Autotests_task1.Pages;
 
 /// <summary>
+/// Main page of Otodom website
 /// </summary>
 public class MainPage : BasePage
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private const string SiteUrl = "https://www.otodom.pl/";
 
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }

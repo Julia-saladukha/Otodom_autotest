@@ -1,7 +1,7 @@
 using Aquality.Selenium.Elements.Interfaces;
 using Aquality.Selenium.Elements;
 using OpenQA.Selenium;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using Aquality.Selenium.Browsers;
 using System.Text.RegularExpressions;
 using System.Globalization;
@@ -10,7 +10,7 @@ namespace Autotests_task1.Pages;
 
 public class OfferDetailsPage : BasePage
 {
-    private static readonly NLog.Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
 
     private ILabel PriceLabel => ElementFactory.GetLabel(By.CssSelector("span[data-cy='adPageHeaderPrice']"), "Offer price");
     private ILabel RoomsLabel => ElementFactory.GetLabel(By.XPath("//span[contains(@data-cy,'rooms-number')]"), "Rooms count");
@@ -64,7 +64,7 @@ public class OfferDetailsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Failed to get price with selector: {selector}");
+                Logger.Debug($"Failed to get price with selector: {selector}", ex);
             }
         }
 
@@ -77,7 +77,7 @@ public class OfferDetailsPage : BasePage
         var surfaceSelectors = new[]
         {
             By.XPath("//span[contains(@data-cy,'area') or contains(@data-cy,'surface')]"),
-            By.XPath("//*[contains(text(),'m²') or contains(text(),'m2')]"),
+            By.XPath("//*[contains(text(),'m?') or contains(text(),'m2')]"),
             By.XPath("//span[contains(@class,'area') or contains(@class,'surface')]"),
             By.XPath("//*[contains(@aria-label,'powierzchnia') or contains(@title,'powierzchnia')]"),
             By.CssSelector("[class*='surface']"),
@@ -99,14 +99,14 @@ public class OfferDetailsPage : BasePage
                     var surface = ParseSurfaceFromText(text);
                     if (surface.HasValue)
                     {
-                        Logger.Info($"Found surface using selector {selector}: {surface}m²");
+                        Logger.Info($"Found surface using selector {selector}: {surface}m?");
                         return surface;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Failed to get surface with selector: {selector}");
+                Logger.Debug($"Failed to get surface with selector: {selector}", ex);
             }
         }
 
@@ -147,7 +147,7 @@ public class OfferDetailsPage : BasePage
             }
             catch (Exception ex)
             {
-                Logger.Debug(ex, $"Failed to get rooms with selector: {selector}");
+                Logger.Debug($"Failed to get rooms with selector: {selector}", ex);
             }
         }
 
@@ -169,8 +169,8 @@ public class OfferDetailsPage : BasePage
     {
         var patterns = new[]
         {
-            @"(\d+(?:[.,]\d+)?)\s*m[²2]",           // "45 m²" or "45.5m2"
-            @"(\d+(?:[.,]\d+)?)\s*m\s*²",          // "45 m ²"
+            @"(\d+(?:[.,]\d+)?)\s*m[?2]",           // "45 m?" or "45.5m2"
+            @"(\d+(?:[.,]\d+)?)\s*m\s*?",          // "45 m ?"
             @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",  // "powierzchnia: 45"
             @"(\d+(?:[.,]\d+)?)\s*metr",           // "45 metr"
         };

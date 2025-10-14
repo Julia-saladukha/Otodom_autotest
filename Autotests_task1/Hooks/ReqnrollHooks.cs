@@ -1,6 +1,6 @@
-using NLog;
 using Reqnroll;
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Core.Logging;
 using Autotests_task1.Pages;
 
 namespace Autotests_task1.Hooks;
@@ -8,7 +8,7 @@ namespace Autotests_task1.Hooks;
 [Binding]
 public class ReqnrollHooks
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private readonly ScenarioContext _scenarioContext;
 
     public ReqnrollHooks(ScenarioContext scenarioContext)
@@ -19,7 +19,7 @@ public class ReqnrollHooks
     [BeforeTestRun]
     public static void BeforeTestRun()
     {
-        LogManager.Setup().LoadConfigurationFromFile("nlog.config", optional: true);
+        Logger.Info("Test run started");
     }
 
     [BeforeScenario(Order = 0)]
@@ -51,7 +51,7 @@ public class ReqnrollHooks
         }
         catch (Exception ex)
         {
-            Logger.Debug(ex, "Popup handling before step ignored due to exception");
+            Logger.Debug($"Popup handling before step ignored due to exception: {ex.Message}");
         }
     }
 
@@ -60,7 +60,7 @@ public class ReqnrollHooks
     {
         if (_scenarioContext.TestError != null)
         {
-            Logger.Error(_scenarioContext.TestError, "Scenario failed");
+            Logger.Error($"Scenario failed: {_scenarioContext.TestError.Message}");
         }
         Logger.Info($"Finishing scenario: {_scenarioContext.ScenarioInfo.Title}");
         if (AqualityServices.IsBrowserStarted)

@@ -1,8 +1,8 @@
 ﻿using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Core.Logging;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
-using NLog;
 using OpenQA.Selenium;
 using Autotests_task1.Helpers;
 
@@ -11,7 +11,7 @@ namespace Autotests_task1.Steps;
 [Binding]
 public class SearchSteps
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private readonly MainPage _mainPage = new();
     private readonly ResultsPage _resultsPage = new();
     private readonly OfferDetailsPage _offerDetailsPage = new();
@@ -77,18 +77,19 @@ public class SearchSteps
         var initialUrl = "https://www.otodom.pl/";
         var loaded = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var url = AqualityServices.Browser.CurrentUrl.ToLowerInvariant();
-            if (!url.Equals(initialUrl) && (url.Contains("wynik") || url.Contains("/listing") || url.Contains("/sprzedaz")))
-            {
-                return true;
-            }
-            var driver = AqualityServices.Browser.Driver;
-            var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"));
-            return listings.Any(e => e.Displayed);
-        }, timeout: TimeSpan.FromSeconds(30));
+            var currentUrl = AqualityServices.Browser.CurrentUrl;
+            var urlChanged = !currentUrl.Equals(initialUrl, StringComparison.OrdinalIgnoreCase);
+            var hasResults = currentUrl.Contains("/pl/wyniki/");
+            Logger.Debug($"URL check: changed={urlChanged}, hasResults={hasResults}, current={currentUrl}");
+            return urlChanged || hasResults;
+        }, TimeSpan.FromSeconds(20));
 
-        loaded.Should().BeTrue("Results page should load (URL changed or listings visible)");
-        Logger.Info("Search results page is displayed successfully");
+        loaded.Should().BeTrue("Search results page should load within timeout");
+        Logger.Info($"Search results page loaded: {AqualityServices.Browser.CurrentUrl}");
+
+        var listingsVisible = _resultsPage.WaitForListings(TimeSpan.FromSeconds(15));
+        listingsVisible.Should().BeTrue("Listings should be visible on results page");
+        Logger.Info("Listings are visible on the results page");
     }
 
     // Keep the original combined step for backward compatibility
