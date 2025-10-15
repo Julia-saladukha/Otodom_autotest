@@ -80,26 +80,40 @@ public class MainPage : BasePage
             input.Click();
             var input2 = FindFirstDisplayedElement(_locationInput);
             input2.SendKeys(location);
+            bool suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
+    AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']")).Any(e => e.Displayed),
+    timeout: TimeSpan.FromSeconds(3));
 
-            // Wait for suggestion items
-            var suggestionsShown = AqualityServices.ConditionalWait.WaitFor(() =>
-                AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']"))
-                    .Any(e => e.Displayed), TimeSpan.FromSeconds(5));
-            if (!suggestionsShown)
+            if (!suggestionAppeared)
             {
-                Logger.Warn("Location suggestions did not appear");
-                return false;
+                Logger.Warn("No location suggestions appeared within timeout");
             }
-            var suggestion = AqualityServices.Browser.Driver
-                .FindElements(By.CssSelector("div[role='listitem']"))
-                .FirstOrDefault(e => e.Displayed);
-            if (suggestion == null)
+            else
             {
-                Logger.Warn("No visible suggestion to click");
-                return false;
+                Logger.Info("Location suggestions detected");
             }
-            suggestion.Click();
-            Logger.Info("Location suggestion selected");
+
+            input2.SendKeys(Keys.Enter);
+
+            //// Wait for suggestion items
+            //var suggestionsShown = AqualityServices.ConditionalWait.WaitFor(() =>
+            //    AqualityServices.Browser.Driver.FindElements(By.XPath("//div[@data-sentry-element='StyledListItem' and contains(.,'Warszawa')]"))
+            //        .Any(e => e.Displayed), TimeSpan.FromSeconds(5));
+            //if (!suggestionsShown)
+            //{
+            //    Logger.Warn("Location suggestions did not appear");
+            //    return false;
+            //}
+            //var suggestion = AqualityServices.Browser.Driver
+            //    .FindElements(By.CssSelector("div[role='listitem']"))
+            //    .FirstOrDefault(e => e.Displayed);
+            //if (suggestion == null)
+            //{
+            //    Logger.Warn("No visible suggestion to click");
+            //    return false;
+            //}
+            //suggestion.Click();
+            //Logger.Info("Location suggestion selected");
 
             // CRITICAL: Click on logo after suggestion selection to stabilize form
             var driver = AqualityServices.Browser.Driver;
