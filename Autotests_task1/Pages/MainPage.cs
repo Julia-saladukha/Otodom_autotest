@@ -1,22 +1,22 @@
 using Aquality.Selenium.Browsers;
 using OpenQA.Selenium;
 using Aquality.Selenium.Core.Logging;
+using Autotests_task1.Helpers;
 
 namespace Autotests_task1.Pages;
 
 public class MainPage : BasePage
 {
     private static readonly Logger Logger = AqualityServices.Get<Logger>();
-    private const string SiteUrl = "https://www.otodom.pl/";
+    private static readonly string SiteUrl = ConfigHelper.GetSiteUrl();
 
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }
 
-    // Single locators only
     private readonly By _locationButton  = By.XPath("//input[contains(@data-cy,'search.form.location')]");
     private readonly By _locationInput  = By.XPath("//input[@id='location-search-input']");
     private readonly By _priceFromInput = By.CssSelector("input[data-cy='search-form--field--priceMin']");
     private readonly By _priceToInput   = By.CssSelector("input[data-cy='search-form--field--priceMax']");
-    private readonly By _searchButton   = By.CssSelector("button[data-cy='search.submit-form.results']");
+    private readonly By _searchButton   = By.CssSelector("button[id='search-form-submit']");
     private readonly By _loginButton    = By.XPath("//button[@data-cy='navbar-my-account-button']");
 
     public void Open()
@@ -25,8 +25,6 @@ public class MainPage : BasePage
         AqualityServices.Browser.GoTo(SiteUrl);
         AqualityServices.Browser.WaitForPageToLoad();
     }
-
-    public bool WaitUntilLoaded() => State.WaitForDisplayed(TimeSpan.FromSeconds(10));
 
     public void AcceptCookiesIfPresent()
     {
@@ -74,106 +72,82 @@ public class MainPage : BasePage
             Logger.Error("Location input not found");
             return false;
         }
-        try
+        
+        input.Click();
+        var input2 = FindFirstDisplayedElement(_locationInput);
+        input2.SendKeys(location);
+        
+        bool suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
+            AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']")).Any(e => e.Displayed),
+            timeout: TimeSpan.FromSeconds(3));
+
+        if (!suggestionAppeared)
         {
-            
-            input.Click();
-            var input2 = FindFirstDisplayedElement(_locationInput);
-            input2.SendKeys(location);
-            bool suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
-    AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']")).Any(e => e.Displayed),
-    timeout: TimeSpan.FromSeconds(3));
-
-            if (!suggestionAppeared)
-            {
-                Logger.Warn("No location suggestions appeared within timeout");
-            }
-            else
-            {
-                Logger.Info("Location suggestions detected");
-            }
-
-            input2.SendKeys(Keys.Enter);
-
-            //// Wait for suggestion items
-            //var suggestionsShown = AqualityServices.ConditionalWait.WaitFor(() =>
-            //    AqualityServices.Browser.Driver.FindElements(By.XPath("//div[@data-sentry-element='StyledListItem' and contains(.,'Warszawa')]"))
-            //        .Any(e => e.Displayed), TimeSpan.FromSeconds(5));
-            //if (!suggestionsShown)
-            //{
-            //    Logger.Warn("Location suggestions did not appear");
-            //    return false;
-            //}
-            //var suggestion = AqualityServices.Browser.Driver
-            //    .FindElements(By.CssSelector("div[role='listitem']"))
-            //    .FirstOrDefault(e => e.Displayed);
-            //if (suggestion == null)
-            //{
-            //    Logger.Warn("No visible suggestion to click");
-            //    return false;
-            //}
-            //suggestion.Click();
-            //Logger.Info("Location suggestion selected");
-
-            // CRITICAL: Click on logo after suggestion selection to stabilize form
-            var driver = AqualityServices.Browser.Driver;
-            var logoElement = driver.FindElements(By.XPath("//a[@data-sentry-element='Logo']"))
-                .FirstOrDefault(e => e.Displayed && e.Enabled);
-            
-            if (logoElement != null)
-            {
-                Logger.Info("Clicking on Otodom logo to stabilize form");
-                logoElement.Click();
-                Logger.Info("Successfully clicked on logo");
-                Thread.Sleep(1000); // Allow page to process logo click
-            }
-                      
-            // Additional readiness check with extended timeout
-            var formReady = AqualityServices.ConditionalWait.WaitFor(() =>
-            {
-                var priceMin = FindFirstDisplayedElement(_priceFromInput);
-                return priceMin != null && IsElementFullyInteractable(priceMin);
-            }, TimeSpan.FromSeconds(5));
-            Logger.Debug($"Form ready after location: {formReady}");
-            return true;
+            Logger.Warn("No location suggestions appeared within timeout");
         }
-        catch (Exception ex)
+        else
         {
-            Logger.Error($"Error setting location: {ex.Message}");
-            return false;
+            Logger.Info("Location suggestions detected");
         }
+
+        input2.SendKeys(Keys.Enter);
+
+        var driver = AqualityServices.Browser.Driver;
+        var logoElement = driver.FindElements(By.XPath("//a[@data-sentry-element='Logo']"))
+            .FirstOrDefault(e => e.Displayed && e.Enabled);
+        
+        if (logoElement != null)
+        {
+            Logger.Info("Clicking on Otodom logo to stabilize form");
+            logoElement.Click();
+            Logger.Info("Successfully clicked on logo");
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        }
+                  
+        var formReady = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var priceMin = FindFirstDisplayedElement(_priceFromInput);
+            return priceMin != null && IsElementFullyInteractable(priceMin);
+        }, TimeSpan.FromSeconds(5));
+        
+        Logger.Debug($"Form ready after location: {formReady}");
+        return true;
     }
 
     public bool SetPriceRange(int min, int max)
     {
-        var ready = AqualityServices.ConditionalWait.WaitFor(() =>
+        Logger.Info($"Setting price range: {min}-{max}");
+        
+        var inputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var minEl = FindFirstDisplayedElement(_priceFromInput);
-            var maxEl = FindFirstDisplayedElement(_priceToInput);
-            return minEl != null && maxEl != null &&
-                   IsElementFullyInteractable(minEl) && IsElementFullyInteractable(maxEl);
+            var from = FindFirstDisplayedElement(_priceFromInput);
+            var to = FindFirstDisplayedElement(_priceToInput);
+            
+            if (from == null || to == null) return false;
+            if (!IsElementFullyInteractable(from) || !IsElementFullyInteractable(to)) return false;
+            
+            var actions = new OpenQA.Selenium.Interactions.Actions(AqualityServices.Browser.Driver);
+            
+            actions.MoveToElement(from).Click().Perform();
+            from.Clear();
+            from.SendKeys(min.ToString());
+            
+            actions.MoveToElement(to).Click().Perform();
+            to.Clear();
+            to.SendKeys(max.ToString());
+            
+            return true;
+            
         }, TimeSpan.FromSeconds(10));
-        if (!ready)
+        
+        if (inputsReady)
         {
-            Logger.Error("Price inputs not ready");
-            return false;
+            Logger.Info("Price range set successfully");
+            return true;
         }
-        var from = FindFirstDisplayedElement(_priceFromInput);
-        var to = FindFirstDisplayedElement(_priceToInput);
-        if (from == null || to == null)
-        {
-            Logger.Error("Price inputs disappeared");
-            return false;
-        }
-        var driver = AqualityServices.Browser.Driver;
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block:'center'});", from);
-        from.Clear();
-        from.SendKeys(min.ToString());
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block:'center'});", to);
-        to.Clear();
-        to.SendKeys(max.ToString());
-        Logger.Info("Price range set successfully");
-        return true;
+        
+        Logger.Error("Failed to set price range");
+        return false;
     }
 
     public void SetLocationAndPriceFilters(string location, int minPrice, int maxPrice)
@@ -185,14 +159,35 @@ public class MainPage : BasePage
 
     public bool ClickSearchButton()
     {
-        var btn = FindFirstDisplayedElement(_searchButton);
-        if (btn == null) return false;
-        btn.Click();
-        return true;
+        Logger.Info("Clicking search button");
+
+        var clickSucceeded = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var btn = FindFirstDisplayedElement(_searchButton);
+            if (btn == null)
+            {
+                Logger.Error("Search button not found");
+                return false;
+            }
+
+            if (btn.Displayed && btn.Enabled)
+            {
+                btn.Click();
+                return true;
+            }
+
+            return false;
+        }, TimeSpan.FromSeconds(5));
+
+        if (clickSucceeded)
+        {
+            Logger.Info("Search button clicked successfully");
+            return true;
+        }
+
+        Logger.Error("Failed to click search button after waiting 5 seconds");
+        return false;
     }
-
-    public bool Search() => ClickSearchButton();
-
     private IWebElement? FindFirstDisplayedElement(By locator) {
 
         var a = AqualityServices.Browser.Driver.FindElements(locator);
@@ -202,17 +197,11 @@ public class MainPage : BasePage
 
     private bool IsElementFullyInteractable(IWebElement element)
     {
-        if (element == null) return false;
-        try
-        {
-            var displayed = element.Displayed;
-            var enabled = element.Enabled;
-            var size = element.Size;
-            var loc = element.Location;
-            var inViewport = loc.X >= -50 && loc.Y >= -50 && size.Width > 5 && size.Height > 5;
-            _ = element.TagName; // stale check
-            return displayed && enabled && size.Width > 0 && size.Height > 0 && inViewport;
-        }
-        catch { return false; }
+        return element != null && AqualityServices.ConditionalWait.WaitFor(() =>
+            element.Displayed && element.Enabled &&
+            element.Size.Width > 5 && element.Size.Height > 5 &&
+            element.Location.X >= -50 && element.Location.Y >= -50,
+            TimeSpan.FromMilliseconds(200)
+        );
     }
 }

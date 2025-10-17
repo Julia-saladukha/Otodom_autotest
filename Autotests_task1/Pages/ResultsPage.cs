@@ -1,7 +1,7 @@
-using Aquality.Selenium.Browsers;
+ï»¿using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Elements;
 using Aquality.Selenium.Elements.Interfaces;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -11,14 +11,13 @@ namespace Autotests_task1.Pages;
 
 public class ResultsPage : BasePage
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(5);
 
     public ResultsPage() : base(By.CssSelector("body"), "Results Page") { }
 
     #region Locators
-    // Listing containers - multiple selectors for robustness
     private readonly IReadOnlyCollection<By> _listingLocators = new List<By>
     {
         By.CssSelector("article[data-cy*='listing']"),
@@ -29,29 +28,26 @@ public class ResultsPage : BasePage
         By.CssSelector("div[class*='offer-card']")
     };
 
-    // Surface area selectors within listings
     private readonly IReadOnlyCollection<By> _surfaceLocators = new List<By>
     {
-        By.XPath(".//span[contains(text(),'m²') or contains(text(),'m2')]"),
-        By.XPath(".//*[contains(text(),'m²') or contains(text(),'m2')]"),
+        By.XPath(".//span[contains(text(),'mÂ²') or contains(text(),'m2')]"),
+        By.XPath(".//*[contains(text(),'mÂ²') or contains(text(),'m2')]"),
         By.XPath(".//div[contains(@class,'surface') or contains(@class,'area')]"),
         By.XPath(".//*[contains(@aria-label,'powierzchnia') or contains(@data-cy,'surface')]"),
         By.CssSelector("span[class*='surface']"),
         By.CssSelector("div[class*='area']")
     };
 
-    // Price filter clear buttons
     private readonly IReadOnlyCollection<By> _priceClearLocators = new List<By>
     {
         By.CssSelector("button[data-cy*='price-clear']"),
         By.CssSelector("button[aria-label*='Clear price']"),
         By.CssSelector("button[title*='Clear price']"),
-        By.XPath("//button[contains(.,'Clear') or contains(.,'Wyczy??')]"),
+        By.XPath("//button[contains(.,'Clear') or contains(.,'WyczyÅ›Ä‡')]"),
         By.CssSelector(".filter-clear"),
         By.CssSelector("button.clear-filter")
     };
 
-    // Surface filter input fields
     private readonly IReadOnlyCollection<By> _surfaceMinInputLocators = new List<By>
     {
         By.CssSelector("input[data-cy='search.form.surface.from']"),
@@ -72,7 +68,6 @@ public class ResultsPage : BasePage
         By.CssSelector("input[data-testid*='surface-max']")
     };
 
-    // Search button
     private readonly IReadOnlyCollection<By> _searchButtonLocators = new List<By>
     {
         By.Id("search-form-submit"),
@@ -88,12 +83,8 @@ public class ResultsPage : BasePage
         Logger.Info("Waiting for listings to load");
         return AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            try
-            {
-                var driver = AqualityServices.Browser.Driver;
-                return GetListingElements().Any();
-            }
-            catch { return false; }
+            var driver = AqualityServices.Browser.Driver;
+            return GetListingElements().Any();
         }, timeout);
     }
 
@@ -102,18 +93,11 @@ public class ResultsPage : BasePage
         var driver = AqualityServices.Browser.Driver;
         foreach (var locator in _listingLocators)
         {
-            try
+            var elements = driver.FindElements(locator).Where(e => e.Displayed).ToList();
+            if (elements.Any())
             {
-                var elements = driver.FindElements(locator).Where(e => e.Displayed).ToList();
-                if (elements.Any())
-                {
-                    Logger.Debug($"Found {elements.Count} listings using locator: {locator}");
-                    return elements;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, $"Failed to find listings with locator: {locator}");
+                Logger.Debug($"Found {elements.Count} listings using locator: {locator}");
+                return elements;
             }
         }
         return new List<IWebElement>();
@@ -125,7 +109,6 @@ public class ResultsPage : BasePage
     {
         Logger.Info("Analyzing surface areas from first page listings");
         
-        // Wait for listings to be available
         if (!WaitForListings(DefaultWait))
         {
             Logger.Warn("No listings found, using default surface range");
@@ -133,46 +116,38 @@ public class ResultsPage : BasePage
         }
 
         var surfaceValues = new List<int>();
-        var listings = GetListingElements().Take(20).ToList(); // Analyze up to 20 listings
+        var listings = GetListingElements().Take(20).ToList();
         
         Logger.Info($"Found {listings.Count} listings to analyze for surface area");
 
         foreach (var listing in listings)
         {
-            try
+            var surfaceValue = ExtractSurfaceFromListing(listing);
+            if (surfaceValue.HasValue)
             {
-                var surfaceValue = ExtractSurfaceFromListing(listing);
-                if (surfaceValue.HasValue)
-                {
-                    surfaceValues.Add(surfaceValue.Value);
-                    Logger.Debug($"Extracted surface: {surfaceValue}m²");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to extract surface from listing");
+                surfaceValues.Add(surfaceValue.Value);
+                Logger.Debug($"Extracted surface: {surfaceValue}mÂ²");
             }
         }
 
         if (!surfaceValues.Any())
         {
-            Logger.Warn("No surface values found, using default range 40-120m²");
+            Logger.Warn("No surface values found, using default range 40-120mÂ²");
             return (40, 120);
         }
 
         var minSurface = surfaceValues.Min();
         var maxSurface = surfaceValues.Max();
 
-        // Ensure reasonable range - expand if too narrow
         if (maxSurface - minSurface < 10)
         {
-            Logger.Warn("Surface range too narrow, expanding by ±10m²");
+            Logger.Warn("Surface range too narrow, expanding by Â±10mÂ²");
             var avg = (minSurface + maxSurface) / 2;
             minSurface = Math.Max(10, avg - 10);
             maxSurface = Math.Min(500, avg + 10);
         }
 
-        Logger.Info($"Surface range determined from {surfaceValues.Count} values: Min = {minSurface}m², Max = {maxSurface}m²");
+        Logger.Info($"Surface range determined from {surfaceValues.Count} values: Min = {minSurface}mÂ², Max = {maxSurface}mÂ²");
         return (minSurface, maxSurface);
     }
 
@@ -186,25 +161,18 @@ public class ResultsPage : BasePage
     {
         foreach (var locator in _surfaceLocators)
         {
-            try
+            var elements = listing.FindElements(locator);
+            foreach (var element in elements.Where(e => e.Displayed))
             {
-                var elements = listing.FindElements(locator);
-                foreach (var element in elements.Where(e => e.Displayed))
-                {
-                    var text = element.Text?.Trim();
-                    if (string.IsNullOrEmpty(text)) continue;
+                var text = element.Text?.Trim();
+                if (string.IsNullOrEmpty(text)) continue;
 
-                    var surface = ParseSurfaceFromText(text);
-                    if (surface.HasValue)
-                    {
-                        Logger.Debug($"Found surface text: '{text}' -> {surface}m²");
-                        return surface;
-                    }
+                var surface = ParseSurfaceFromText(text);
+                if (surface.HasValue)
+                {
+                    Logger.Debug($"Found surface text: '{text}' -> {surface}mÂ²");
+                    return surface;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, $"Error with surface locator: {locator}");
             }
         }
         return null;
@@ -233,25 +201,18 @@ public class ResultsPage : BasePage
 
         foreach (var selector in roomsSelectors)
         {
-            try
+            var elements = listing.FindElements(selector);
+            foreach (var element in elements.Where(e => e.Displayed))
             {
-                var elements = listing.FindElements(selector);
-                foreach (var element in elements.Where(e => e.Displayed))
-                {
-                    var text = element.Text?.Trim();
-                    if (string.IsNullOrEmpty(text)) continue;
+                var text = element.Text?.Trim();
+                if (string.IsNullOrEmpty(text)) continue;
 
-                    var rooms = ParseRoomsFromText(text);
-                    if (rooms.HasValue)
-                    {
-                        Logger.Debug($"Found rooms text: '{text}' -> {rooms} rooms");
-                        return rooms;
-                    }
+                var rooms = ParseRoomsFromText(text);
+                if (rooms.HasValue)
+                {
+                    Logger.Debug($"Found rooms text: '{text}' -> {rooms} rooms");
+                    return rooms;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, $"Error with rooms selector: {selector}");
             }
         }
         return null;
@@ -261,9 +222,9 @@ public class ResultsPage : BasePage
     {
         var patterns = new[]
         {
-            @"(\d+)\s*poko[ij]",           // "3 pokoi" or "3 pokoje"
-            @"(\d+)\s*rooms?",            // "3 room" or "3 rooms"
-            @"^(\d+)$"                    // Just a number if in context of rooms
+            @"(\d+)\s*poko[ij]",
+            @"(\d+)\s*rooms?",
+            @"^(\d+)$"
         };
 
         foreach (var pattern in patterns)
@@ -273,7 +234,6 @@ public class ResultsPage : BasePage
             {
                 if (int.TryParse(match.Groups[1].Value, out var rooms))
                 {
-                    // Validate reasonable room count
                     if (rooms >= 1 && rooms <= 10)
                     {
                         return rooms;
@@ -288,35 +248,30 @@ public class ResultsPage : BasePage
     {
         var priceSelectors = new[]
         {
-            By.XPath(".//*[contains(text(),'PLN') or contains(text(),'z?')]"),
+            By.XPath(".//*[contains(text(),'PLN') or contains(text(),'zÅ‚')]"),
             By.CssSelector("span[class*='price']"),
             By.CssSelector("div[class*='price']")
         };
 
         foreach (var selector in priceSelectors)
         {
-            try
+            var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed);
+            if (element != null && !string.IsNullOrEmpty(element.Text))
             {
-                var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed);
-                if (element != null && !string.IsNullOrEmpty(element.Text))
-                {
-                    return element.Text.Trim();
-                }
+                return element.Text.Trim();
             }
-            catch { }
         }
         return null;
     }
 
     private int? ParseSurfaceFromText(string text)
     {
-        // Multiple regex patterns for different surface formats
         var patterns = new[]
         {
-            @"(\d+(?:[.,]\d+)?)\s*m[²2]",           // "45 m²" or "45.5m2"
-            @"(\d+(?:[.,]\d+)?)\s*m\s*²",          // "45 m ²"
-            @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",  // "powierzchnia: 45"
-            @"(\d+(?:[.,]\d+)?)\s*metr",           // "45 metr"
+            @"(\d+(?:[.,]\d+)?)\s*m[Â²2]",
+            @"(\d+(?:[.,]\d+)?)\s*m\s*Â²",
+            @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",
+            @"(\d+(?:[.,]\d+)?)\s*metr",
         };
 
         foreach (var pattern in patterns)
@@ -328,7 +283,6 @@ public class ResultsPage : BasePage
                 if (double.TryParse(valueStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
                 {
                     var intValue = (int)Math.Round(value);
-                    // Validate reasonable surface area range
                     if (intValue >= 10 && intValue <= 500)
                     {
                         return intValue;
@@ -360,25 +314,18 @@ public class ResultsPage : BasePage
 
         foreach (var listing in listings)
         {
-            try
+            var price = ExtractPriceFromListing(listing);
+            if (price.HasValue)
             {
-                var price = ExtractPriceFromListing(listing);
-                if (price.HasValue)
+                totalPrices++;
+                if (price.Value >= min && price.Value <= max)
                 {
-                    totalPrices++;
-                    if (price.Value >= min && price.Value <= max)
-                    {
-                        validPrices++;
-                    }
-                    else
-                    {
-                        Logger.Debug($"Price {price.Value} is outside range {min}-{max}");
-                    }
+                    validPrices++;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to validate price for listing");
+                else
+                {
+                    Logger.Debug($"Price {price.Value} is outside range {min}-{max}");
+                }
             }
         }
 
@@ -389,36 +336,29 @@ public class ResultsPage : BasePage
 
     public bool AreAllSurfacesWithinRange(double min, double max)
     {
-        Logger.Info($"Validating all surfaces are within range {min} - {max}m²");
+        Logger.Info($"Validating all surfaces are within range {min} - {max}mÂ²");
         var listings = GetListingElements().Take(15).ToList();
         int validSurfaces = 0;
         int totalSurfaces = 0;
 
         foreach (var listing in listings)
         {
-            try
+            var surface = ExtractSurfaceFromListing(listing);
+            if (surface.HasValue)
             {
-                var surface = ExtractSurfaceFromListing(listing);
-                if (surface.HasValue)
+                totalSurfaces++;
+                if (surface.Value >= min && surface.Value <= max)
                 {
-                    totalSurfaces++;
-                    if (surface.Value >= min && surface.Value <= max)
-                    {
-                        validSurfaces++;
-                    }
-                    else
-                    {
-                        Logger.Debug($"Surface {surface.Value}m² is outside range {min}-{max}m²");
-                    }
+                    validSurfaces++;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, "Failed to validate surface for listing");
+                else
+                {
+                    Logger.Debug($"Surface {surface.Value}mÂ² is outside range {min}-{max}mÂ²");
+                }
             }
         }
 
-        var isValid = totalSurfaces > 0 && validSurfaces >= (totalSurfaces * 0.8); // Allow 80% tolerance
+        var isValid = totalSurfaces > 0 && validSurfaces >= (totalSurfaces * 0.8);
         Logger.Info($"Surface validation: {validSurfaces}/{totalSurfaces} surfaces within range");
         return isValid;
     }
@@ -437,22 +377,13 @@ public class ResultsPage : BasePage
         var random = new Random();
         var selectedListing = listings[random.Next(listings.Count)];
         
-        // Extract data before clicking
         var price = ExtractPriceFromListing(selectedListing);
         var surface = ExtractSurfaceFromListing(selectedListing);
         var rooms = ExtractRoomsFromListing(selectedListing);
         
-        try
-        {
-            // Find clickable link within the listing
-            var link = selectedListing.FindElement(By.TagName("a"));
-            link.Click();
-            Logger.Info("Clicked on random offer");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to click on offer link");
-        }
+        var link = selectedListing.FindElement(By.TagName("a"));
+        link.Click();
+        Logger.Info("Clicked on random offer");
 
         return (price, surface.HasValue ? (double?)surface.Value : null, rooms);
     }
@@ -465,50 +396,33 @@ public class ResultsPage : BasePage
         var driver = AqualityServices.Browser.Driver;
         bool cleared = false;
 
-        // Try to find and click clear button
         foreach (var locator in _priceClearLocators)
         {
-            try
+            var clearButton = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
+            if (clearButton != null)
             {
-                var clearButton = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
-                if (clearButton != null)
-                {
-                    clearButton.Click();
-                    Logger.Info($"Clicked price clear button using locator: {locator}");
-                    cleared = true;
-                    break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug(ex, $"Failed to click clear button with locator: {locator}");
+                clearButton.Click();
+                Logger.Info($"Clicked price clear button using locator: {locator}");
+                cleared = true;
+                break;
             }
         }
 
-        // Fallback: Clear price input fields directly
         if (!cleared)
         {
             Logger.Info("Clear button not found, clearing price input fields directly");
-            try
+            var priceInputs = driver.FindElements(By.CssSelector("input[data-cy*='price'], input[name*='price']"));
+            foreach (var input in priceInputs.Where(i => i.Displayed && i.Enabled))
             {
-                var priceInputs = driver.FindElements(By.CssSelector("input[data-cy*='price'], input[name*='price']"));
-                foreach (var input in priceInputs.Where(i => i.Displayed && i.Enabled))
-                {
-                    input.Clear();
-                    Logger.Debug("Cleared price input field");
-                    cleared = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "Failed to clear price input fields");
+                input.Clear();
+                Logger.Debug("Cleared price input field");
+                cleared = true;
             }
         }
 
         if (cleared)
         {
-            // Wait a moment for UI to update
-            Thread.Sleep(500);
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
             Logger.Info("Price filter cleared successfully");
         }
         else
@@ -519,10 +433,9 @@ public class ResultsPage : BasePage
 
     public void SetSurfaceRange(int min, int max)
     {
-        Logger.Info($"Setting surface range: {min} - {max} m²");
+        Logger.Info($"Setting surface range: {min} - {max} mÂ²");
         var driver = AqualityServices.Browser.Driver;
 
-        // IMPROVED: Wait for surface inputs to be available with extended timeout
         var surfaceInputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
             var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
@@ -534,10 +447,9 @@ public class ResultsPage : BasePage
         if (!surfaceInputsReady)
         {
             Logger.Error("Surface input fields never became ready for interaction");
-            return; // Don't throw exception, let caller handle validation
+            return;
         }
 
-        // Get fresh element references
         var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
         var maxInput = FindFirstDisplayedElement(driver, _surfaceMaxInputLocators);
 
@@ -547,32 +459,26 @@ public class ResultsPage : BasePage
             return;
         }
 
-        // REMOVED try-catch - let errors be visible!
         Logger.Info("Setting minimum surface...");
-        
-        // Scroll to element and ensure visibility
         ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", minInput);
-        Thread.Sleep(500);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         
         minInput.Clear();
-        Thread.Sleep(500);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         minInput.SendKeys(min.ToString());
-        Logger.Info($"Set minimum surface: {min}m²");
-        Thread.Sleep(500);
+        Logger.Info($"Set minimum surface: {min}mÂ²");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
 
         Logger.Info("Setting maximum surface...");
-        
-        // Same for max input
         ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", maxInput);
-        Thread.Sleep(500);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         
         maxInput.Clear();
-        Thread.Sleep(500);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         maxInput.SendKeys(max.ToString());
-        Logger.Info($"Set maximum surface: {max}m²");
+        Logger.Info($"Set maximum surface: {max}mÂ²");
 
-        // Extended delay to allow UI to process the input
-        Thread.Sleep(1000);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
         Logger.Info("Surface range set successfully");
     }
 
@@ -585,21 +491,19 @@ public class ResultsPage : BasePage
     {
         if (element == null) return false;
         
-        var displayed = element.Displayed;
-        var enabled = element.Enabled;
-        var hasSize = element.Size.Height > 0 && element.Size.Width > 0;
+        var interactable = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var displayed = element.Displayed;
+            var enabled = element.Enabled;
+            var hasSize = element.Size.Height > 0 && element.Size.Width > 0;
+            var location = element.Location;
+            var size = element.Size;
+            var inViewport = location.X >= -50 && location.Y >= -50 && size.Width > 5 && size.Height > 5;
+            _ = element.TagName;
+            return displayed && enabled && hasSize && inViewport;
+        }, TimeSpan.FromMilliseconds(100));
         
-        // Enhanced checks for true interactability
-        var location = element.Location;
-        var size = element.Size;
-        var inViewport = location.X >= -50 && location.Y >= -50 && size.Width > 5 && size.Height > 5;
-        
-        // Check element is not stale by accessing a property
-        var tagName = element.TagName; // This will throw if element is stale
-        
-        var result = displayed && enabled && hasSize && inViewport;
-        Logger.Debug($"Surface element full interactability: displayed={displayed}, enabled={enabled}, hasSize={hasSize}, inViewport={inViewport} => {result}");
-        return result;
+        return interactable;
     }
     #endregion
 
@@ -613,9 +517,7 @@ public class ResultsPage : BasePage
         {
             searchButton.Click();
             Logger.Info("Search button clicked successfully");
-            
-            // Wait for search to complete
-            Thread.Sleep(1000);
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
         }
         else
         {
@@ -658,8 +560,7 @@ public class ResultsPage : BasePage
             };
             
             listingsData.Add(listingData);
-            
-            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}m², Rooms={listingData.Rooms}, Title='{listingData.Title}'");
+            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}mÂ², Rooms={listingData.Rooms}, Title='{listingData.Title}'");
         }
         
         Logger.Info($"Collected data from {listingsData.Count} listings");

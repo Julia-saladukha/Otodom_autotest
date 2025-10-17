@@ -1,14 +1,12 @@
 using System.Text.Json;
-using NLog;
+using Aquality.Selenium.Core.Logging;
+using Aquality.Selenium.Browsers;
 
 namespace Autotests_task1.Helpers;
 
-// <summary>
-// Simple configuration helper to read credentials from appsettings.secrets.json
-// </summary>
 public static class ConfigHelper
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     
     private static readonly Lazy<JsonDocument> SecretsDocument = new(() =>
     {
@@ -30,15 +28,11 @@ public static class ConfigHelper
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to parse secrets configuration file");
+            Logger.Error($"Failed to parse secrets configuration file: {ex.Message}");
             throw new InvalidOperationException("Failed to parse appsettings.secrets.json", ex);
         }
     });
 
-    // <summary>
-    // Gets username from credentials section
-    // </summary>
-    // <returns>Username from configuration</returns>
     public static string GetUsername()
     {
         try
@@ -54,15 +48,11 @@ public static class ConfigHelper
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to retrieve username from configuration");
+            Logger.Error($"Failed to retrieve username from configuration: {ex.Message}");
             throw new InvalidOperationException("Failed to get username from appsettings.secrets.json", ex);
         }
     }
 
-    // <summary>
-    // Gets password from credentials section
-    // </summary>
-    // <returns>Password from configuration</returns>
     public static string GetPassword()
     {
         try
@@ -78,15 +68,11 @@ public static class ConfigHelper
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to retrieve password from configuration");
+            Logger.Error($"Failed to retrieve password from configuration: {ex.Message}");
             throw new InvalidOperationException("Failed to get password from appsettings.secrets.json", ex);
         }
     }
 
-    // <summary>
-    // Gets base URL from otodom section
-    // </summary>
-    // <returns>Base URL from configuration</returns>
     public static string GetBaseUrl()
     {
         try
@@ -95,15 +81,11 @@ public static class ConfigHelper
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to get base URL from configuration, using default");
+            Logger.Warn($"Failed to get base URL from configuration, using default: {ex.Message}");
             return "https://www.otodom.pl/";
         }
     }
 
-    // <summary>
-    // Gets login URL from otodom section
-    // </summary>
-    // <returns>Login URL from configuration</returns>
     public static string GetLoginUrl()
     {
         try
@@ -112,17 +94,24 @@ public static class ConfigHelper
         }
         catch (Exception ex)
         {
-            Logger.Warn(ex, "Failed to get login URL from configuration, using default");
+            Logger.Warn($"Failed to get login URL from configuration, using default: {ex.Message}");
             return "https://login.otodom.pl/";
         }
     }
 
-    // <summary>
-    // Gets a configuration value from nested JSON structure
-    // </summary>
-    // <param name="section">Top-level section name</param>
-    // <param name="key">Key within the section</param>
-    // <returns>Configuration value as string</returns>
+    public static string GetSiteUrl()
+    {
+        try
+        {
+            return GetConfigValue("otodom", "siteUrl") ?? "https://www.otodom.pl/";
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Failed to get site URL from configuration, using default: {ex.Message}");
+            return "https://www.otodom.pl/";
+        }
+    }
+
     private static string GetConfigValue(string section, string key)
     {
         var document = SecretsDocument.Value;
@@ -141,11 +130,6 @@ public static class ConfigHelper
         return valueElement.GetString() ?? string.Empty;
     }
 
-    // <summary>
-    // Masks email address for secure logging
-    // </summary>
-    // <param name="email">Email to mask</param>
-    // <returns>Masked email for logging</returns>
     private static string MaskEmail(string email)
     {
         if (string.IsNullOrEmpty(email) || !email.Contains('@'))

@@ -1,11 +1,12 @@
 using Reqnroll;
-using NLog;
+using Aquality.Selenium.Core.Logging;
+using Aquality.Selenium.Browsers;
 
 namespace Autotests_task1.Helpers;
 
 public static class ScenarioContextHelper
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
 
     public static void Set<T>(ScenarioContext context, string key, T value)
     {

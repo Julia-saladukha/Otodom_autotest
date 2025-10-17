@@ -1,4 +1,4 @@
-using Aquality.Selenium.Elements.Interfaces;
+﻿using Aquality.Selenium.Elements.Interfaces;
 using Aquality.Selenium.Elements;
 using OpenQA.Selenium;
 using Aquality.Selenium.Core.Logging;
@@ -11,10 +11,6 @@ namespace Autotests_task1.Pages;
 public class OfferDetailsPage : BasePage
 {
     private static readonly Logger Logger = AqualityServices.Get<Logger>();
-
-    private ILabel PriceLabel => ElementFactory.GetLabel(By.CssSelector("span[data-cy='adPageHeaderPrice']"), "Offer price");
-    private ILabel RoomsLabel => ElementFactory.GetLabel(By.XPath("//span[contains(@data-cy,'rooms-number')]"), "Rooms count");
-    private ILabel SurfaceLabel => ElementFactory.GetLabel(By.XPath("//span[contains(@data-cy,'area')]"), "Surface");
 
     public OfferDetailsPage() : base(By.CssSelector("main"), "Offer Details Page") {}
 
@@ -32,126 +28,101 @@ public class OfferDetailsPage : BasePage
 
     private int? GetPriceWithFallback()
     {
-        var priceSelectors = new[]
-        {
-            By.CssSelector("span[data-cy='adPageHeaderPrice']"),
-            By.XPath("//span[contains(@class,'price') or contains(@data-cy,'price')]"),
-            By.XPath("//*[contains(text(),'PLN') or contains(text(),'z?')]"),
-            By.CssSelector(".price"),
-            By.CssSelector("[class*='price']"),
-            By.XPath("//strong[contains(text(),'PLN') or contains(text(),'z?')]")
-        };
-
         var driver = AqualityServices.Browser.Driver;
-        
-        foreach (var selector in priceSelectors)
-        {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements.Where(e => e.Displayed))
-                {
-                    var text = element.Text?.Trim();
-                    if (string.IsNullOrEmpty(text)) continue;
+        var priceSelector = By.CssSelector("span[data-cy='adPageHeaderPrice']");
+        var element = driver.FindElements(priceSelector)
+                            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
-                    var price = ParsePriceFromText(text);
-                    if (price.HasValue)
-                    {
-                        Logger.Info($"Found price using selector {selector}: {price}");
-                        return price;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Failed to get price with selector: {selector}", ex);
-            }
+        if (element == null)
+        {
+            Logger.Warn("No visible and alive price element found");
+            return null;
         }
 
-        Logger.Warn("Could not extract price from offer page");
+        var text = element.Text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            Logger.Warn("Price element text is empty");
+            return null;
+        }
+
+        var price = ParsePriceFromText(text);
+        if (price.HasValue)
+        {
+            Logger.Info($"Found price: {price}");
+            return price;
+        }
+
+        Logger.Warn($"Failed to parse price from text: '{text}'");
         return null;
+    }
+
+    private bool SafeIsDisplayedAndAlive(IWebElement element)
+    {
+        return AqualityServices.ConditionalWait.WaitFor(() =>
+            element.Displayed && element.TagName != null,
+            TimeSpan.FromMilliseconds(100));
     }
 
     private double? GetSurfaceWithFallback()
     {
-        var surfaceSelectors = new[]
-        {
-            By.XPath("//span[contains(@data-cy,'area') or contains(@data-cy,'surface')]"),
-            By.XPath("//*[contains(text(),'m?') or contains(text(),'m2')]"),
-            By.XPath("//span[contains(@class,'area') or contains(@class,'surface')]"),
-            By.XPath("//*[contains(@aria-label,'powierzchnia') or contains(@title,'powierzchnia')]"),
-            By.CssSelector("[class*='surface']"),
-            By.CssSelector("[class*='area']")
-        };
-
         var driver = AqualityServices.Browser.Driver;
-        
-        foreach (var selector in surfaceSelectors)
-        {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements.Where(e => e.Displayed))
-                {
-                    var text = element.Text?.Trim();
-                    if (string.IsNullOrEmpty(text)) continue;
+        var surfaceSelector = By.XPath("//*[@data-sentry-element='ItemGridContainer']//*[contains(translate(text(),'²М','2M'),'m2')]");
+        var element = driver.FindElements(surfaceSelector)
+            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
-                    var surface = ParseSurfaceFromText(text);
-                    if (surface.HasValue)
-                    {
-                        Logger.Info($"Found surface using selector {selector}: {surface}m?");
-                        return surface;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Failed to get surface with selector: {selector}", ex);
-            }
+        if (element == null)
+        {
+            Logger.Warn("No visible surface element found inside ItemGridContainer");
+            return null;
         }
 
-        Logger.Warn("Could not extract surface from offer page");
+        var text = element.Text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            Logger.Warn("Surface element text is empty");
+            return null;
+        }
+
+        var surface = ParseSurfaceFromText(text);
+        if (surface.HasValue)
+        {
+            Logger.Info($"Found surface: {surface} m²");
+            return surface;
+        }
+
+        Logger.Warn($"Failed to parse surface from text: '{text}'");
         return null;
     }
 
     private int? GetRoomsWithFallback()
     {
-        var roomsSelectors = new[]
-        {
-            By.XPath("//span[contains(@data-cy,'rooms-number') or contains(@data-cy,'rooms')]"),
-            By.XPath("//*[contains(text(),'pokoi') or contains(text(),'pokoje') or contains(text(),'rooms')]"),
-            By.XPath("//span[contains(@class,'rooms') or contains(@aria-label,'pokoi')]"),
-            By.CssSelector("[class*='rooms']"),
-            By.XPath("//*[contains(@title,'pokoi') or contains(@title,'rooms')]")
-        };
-
         var driver = AqualityServices.Browser.Driver;
-        
-        foreach (var selector in roomsSelectors)
-        {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements.Where(e => e.Displayed))
-                {
-                    var text = element.Text?.Trim();
-                    if (string.IsNullOrEmpty(text)) continue;
+        var roomsSelector = By.XPath("//*[contains(text(),'pokoi') or contains(text(),'pokoje') or contains(text(),'rooms')]");
+        var element = driver.FindElements(roomsSelector)
+                            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
-                    var rooms = ParseRoomsFromText(text);
-                    if (rooms.HasValue)
-                    {
-                        Logger.Info($"Found rooms using selector {selector}: {rooms}");
-                        return rooms;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Failed to get rooms with selector: {selector}", ex);
-            }
+        if (element == null)
+        {
+            Logger.Warn("No visible and alive rooms element found");
+            return null;
         }
 
-        Logger.Warn("Could not extract rooms count from offer page");
+        var text = element.Text?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            Logger.Warn("Rooms element text is empty");
+            return null;
+        }
+
+        var rooms = ParseRoomsFromText(text);
+        if (rooms.HasValue)
+        {
+            Logger.Info($"Found rooms: {rooms}");
+            return rooms;
+        }
+
+        Logger.Warn($"Failed to parse rooms from text: '{text}'");
         return null;
     }
 
@@ -169,10 +140,10 @@ public class OfferDetailsPage : BasePage
     {
         var patterns = new[]
         {
-            @"(\d+(?:[.,]\d+)?)\s*m[?2]",           // "45 m?" or "45.5m2"
-            @"(\d+(?:[.,]\d+)?)\s*m\s*?",          // "45 m ?"
-            @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",  // "powierzchnia: 45"
-            @"(\d+(?:[.,]\d+)?)\s*metr",           // "45 metr"
+            @"(\d+(?:[.,]\d+)?)\s*m[²2]",
+            @"(\d+(?:[.,]\d+)?)\s*m\s*²",
+            @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",
+            @"(\d+(?:[.,]\d+)?)\s*metr",
         };
 
         foreach (var pattern in patterns)
@@ -183,7 +154,6 @@ public class OfferDetailsPage : BasePage
                 var valueStr = match.Groups[1].Value.Replace(',', '.');
                 if (double.TryParse(valueStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
                 {
-                    // Validate reasonable surface area range
                     if (value >= 10 && value <= 500)
                     {
                         return value;
@@ -198,9 +168,9 @@ public class OfferDetailsPage : BasePage
     {
         var patterns = new[]
         {
-            @"(\d+)\s*poko[ij]",           // "3 pokoi" or "3 pokoje"
-            @"(\d+)\s*rooms?",            // "3 room" or "3 rooms"
-            @"^(\d+)$"                    // Just a number if in context of rooms
+            @"(\d+)\s*poko[ij]",
+            @"(\d+)\s*rooms?",
+            @"^(\d+)$"
         };
 
         foreach (var pattern in patterns)
@@ -210,7 +180,6 @@ public class OfferDetailsPage : BasePage
             {
                 if (int.TryParse(match.Groups[1].Value, out var rooms))
                 {
-                    // Validate reasonable room count
                     if (rooms >= 1 && rooms <= 10)
                     {
                         return rooms;
@@ -219,18 +188,5 @@ public class OfferDetailsPage : BasePage
             }
         }
         return null;
-    }
-
-    // Legacy methods for backward compatibility
-    public int GetPrice() => int.Parse(new string(PriceLabel.Text.Where(char.IsDigit).ToArray()));
-    public int GetRooms() => int.Parse(new string(RoomsLabel.Text.Where(char.IsDigit).ToArray()));
-    public double GetSurface() => double.Parse(new string(SurfaceLabel.Text.Replace(",", ".").Where(c=>char.IsDigit(c) || c=='.').ToArray()));
-    public (int price, double surface, int rooms) ReadDetails()
-    {
-        var price = GetPrice();
-        var surface = GetSurface();
-        var rooms = GetRooms();
-        Logger.Info($"Offer details read -> Price: {price}, Surface: {surface}, Rooms: {rooms}");
-        return (price, surface, rooms);
     }
 }

@@ -35,10 +35,8 @@ public class SearchSteps
         var locationSet = _mainPage.SetLocation(LocationValue);
         locationSet.Should().BeTrue("Location input should be found and value set to Warszawa");
         Logger.Info("Location set successfully");
-
-        // CRITICAL FIX: Extended wait for form stabilization after location selection
         Logger.Info("Waiting for form to stabilize after location selection...");
-        Thread.Sleep(5000); // Extended wait for dynamic form changes
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(5));
 
         var priceSet = _mainPage.SetPriceRange(MinPrice, MaxPrice);
         priceSet.Should().BeTrue("Price range inputs should be found and values entered");
@@ -51,11 +49,6 @@ public class SearchSteps
         Logger.Info("Clicking search button");
 
         var clicked = _mainPage.ClickSearchButton();
-        if (!clicked)
-        {
-            Logger.Warn("Primary search button click failed, trying generic search method");
-            clicked = _mainPage.Search();
-        }
         
         if (!clicked)
         {
@@ -91,7 +84,6 @@ public class SearchSteps
         Logger.Info("Search results page is displayed successfully");
     }
 
-    // Keep the original combined step for backward compatibility
     [When("I set location 'Warszawa' and price range 200000-1000000 and search")]
     public void WhenISetLocationWarszawaAndPriceRangeAndSearch()
     {
@@ -109,7 +101,7 @@ public class SearchSteps
 
         var listingsPresent = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"));
+            var listings = driver.FindElements(By.XPath("//dl[@data-sentry-component='DescriptionList']"));
             return listings.Any(e => e.Displayed);
         }, TimeSpan.FromSeconds(15));
         listingsPresent.Should().BeTrue("At least one listing should be visible");
@@ -132,7 +124,6 @@ public class SearchSteps
         Logger.Info("Search results validation (primary) completed");
     }
 
-    // Removed detailed validation methods for brevity
 
     [When("I analyze surface area from results and apply surface filter")]
     public void WhenIAnalyzeSurfaceAreaFromResultsAndApplySurfaceFilter()
@@ -197,7 +188,9 @@ public class SearchSteps
     {
         Logger.Info("Getting random offer and saving its details to scenario context");
         
-        _resultsPage.WaitForListings(TimeSpan.FromSeconds(10))
+        AqualityServices.ConditionalWait.WaitFor(() => 
+            _resultsPage.GetListingElements().Any(), 
+            TimeSpan.FromSeconds(10))
             .Should().BeTrue("Listings should be available before picking random offer");
 
         var listings = _resultsPage.GetListingElements().Take(10).ToList();
@@ -234,7 +227,6 @@ public class SearchSteps
         var link = selectedListing.FindElements(By.TagName("a")).FirstOrDefault(l => l.Displayed);
         link.Should().NotBeNull("A clickable link should be found in the listing");
         
-        // Remove target="_blank" attribute to ensure link opens in same tab
         var driver = AqualityServices.Browser.Driver;
         Logger.Info("Removing target='_blank' attribute from link to ensure same-tab navigation");
         ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].removeAttribute('target');", link);
@@ -302,7 +294,6 @@ public class SearchSteps
 
         if (savedSurface.HasValue && pageSurface.HasValue)
         {
-            // FIXED: Increased tolerance from 2.0 to 5.0 to account for normal differences between listing and detail pages
             pageSurface.Value.Should().BeApproximately((double)savedSurface.Value, 5.0, "Surface should match saved list value within tolerance");
             Logger.Info("Surface validation passed");
         }
@@ -329,60 +320,42 @@ public class SearchSteps
     {
         Logger.Info("Performing detailed validation of search results");
         
-        // Wait for page to stabilize after navigation/filtering
-        Thread.Sleep(2000);
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
         
         var driver = AqualityServices.Browser.Driver;
 
-        // Re-find listings fresh each time to avoid stale element references
         var hasListings = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            try 
-            {
-                var elements = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-                    .Where(e => e.Displayed)
-                    .ToList();
-                return elements.Count > 0;
-            }
-            catch
-            {
-                return false;
-            }
+            var elements = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
+                .Where(e => e.Displayed)
+                .ToList();
+            return elements.Count > 0;
         }, TimeSpan.FromSeconds(10));
 
         hasListings.Should().BeTrue("There should be at least one visible listing");
         
-        // Get actual count for logging
         var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
             .Where(e => e.Displayed)
             .ToList();
         
         Logger.Info($"Found {listings.Count} visible listings to validate");
 
-        // Validate a sample of listings without storing references
         var validListings = 0;
-        for (int i = 0; i < Math.Min(5, listings.Count); i++) // Check first 5 listings
+        for (int i = 0; i < Math.Min(5, listings.Count); i++)
         {
-            try
-            {
-                var currentListings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-                    .Where(e => e.Displayed)
-                    .ToList();
-                
-                if (i >= currentListings.Count) break;
-                
-                var listing = currentListings[i];
-                var hasValidContent = listing.FindElements(By.CssSelector("h2,h3,a[title],a[data-cy*='title'],span[data-cy*='title']"))
-                    .Any(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
-                
-                if (hasValidContent) validListings++;
-            }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Error validating listing {i}: {ex.Message}");
-            }
-        }
+            var currentListings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
+                .Where(e => e.Displayed)
+                .ToList();
         
+            if (i >= currentListings.Count) break;
+        
+            var listing = currentListings[i];
+            var hasValidContent = listing.FindElements(By.CssSelector("h2,h3,a[title],a[data-cy*='title'],span[data-cy*='title']"))
+                .Any(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
+        
+            if (hasValidContent) validListings++;
+        }
+
         Logger.Info($"Successfully validated {validListings} listings");
         Logger.Info("Detailed search results validation completed");
     }
