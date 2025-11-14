@@ -5,7 +5,7 @@ namespace Autotests_task1.Models;
 public class ListingData
 {
     public int Index { get; set; }
-    public IWebElement Element { get; set; }
+    public IWebElement Element { get; set; }  // Kept as IWebElement for backward compatibility
     public int? Price { get; set; }
     public int? Surface { get; set; }
     public int? Rooms { get; set; }

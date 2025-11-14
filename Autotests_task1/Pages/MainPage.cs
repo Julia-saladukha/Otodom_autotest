@@ -1,4 +1,7 @@
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
+using Aquality.Selenium.Core.Elements;
 using OpenQA.Selenium;
 using Aquality.Selenium.Core.Logging;
 using Autotests_task1.Helpers;
@@ -8,6 +11,7 @@ namespace Autotests_task1.Pages;
 public class MainPage : BasePage
 {
     private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
     private static readonly string SiteUrl = ConfigHelper.GetSiteUrl();
 
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }
@@ -17,7 +21,7 @@ public class MainPage : BasePage
     private readonly By _priceFromInput = By.CssSelector("input[data-cy='search-form--field--priceMin']");
     private readonly By _priceToInput   = By.CssSelector("input[data-cy='search-form--field--priceMax']");
     private readonly By _searchButton   = By.CssSelector("button[id='search-form-submit']");
-    private readonly By _loginButton    = By.XPath("//button[@data-cy='navbar-my-account-button']");
+    private readonly By _loginButton    = By.XPath("//div[@data-sentry-element='NexusNavUserMenuWrapper']//button[@data-cy='navbar-my-account-button']");
 
     public void Open()
     {
@@ -28,10 +32,11 @@ public class MainPage : BasePage
 
     public void AcceptCookiesIfPresent()
     {
-        var driver = AqualityServices.Browser.Driver;
-        var btn = driver.FindElements(By.Id("onetrust-accept-btn-handler"))
-            .FirstOrDefault(e => e.Displayed && e.Enabled);
+        var cookieButtons = Factory.FindElements<IButton>(By.Id("onetrust-accept-btn-handler"), "Cookie accept buttons");
+        var btn = cookieButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+        
         if (btn == null) return;
+        
         try
         {
             btn.Click();
@@ -42,7 +47,7 @@ public class MainPage : BasePage
             Logger.Warn($"Standard click failed for cookie button: {ex.Message}");
             try
             {
-                ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", btn);
+                btn.JsActions.Click();
                 Logger.Info("Cookie consent accepted via JS.");
             }
             catch (Exception jsEx)
@@ -54,7 +59,7 @@ public class MainPage : BasePage
 
     public bool OpenLogin()
     {
-        var login = FindFirstDisplayedElement(_loginButton);
+        var login = FindFirstDisplayedButton(_loginButton);
         if (login == null)
         {
             Logger.Error("Login button not found");
@@ -66,7 +71,7 @@ public class MainPage : BasePage
 
     public bool SetLocation(string location)
     {
-        var input = FindFirstDisplayedElement(_locationButton);
+        var input = FindFirstDisplayedTextBox(_locationButton);
         if (input == null)
         {
             Logger.Error("Location input not found");
@@ -74,12 +79,23 @@ public class MainPage : BasePage
         }
         
         input.Click();
-        var input2 = FindFirstDisplayedElement(_locationInput);
-        input2.SendKeys(location);
+        var input2 = FindFirstDisplayedTextBox(_locationInput);
+        if (input2 == null)
+        {
+            Logger.Error("Location search input not found");
+            return false;
+        }
         
+        input2.SendKeys(location);
+
         bool suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
-            AqualityServices.Browser.Driver.FindElements(By.CssSelector("div[role='listitem']")).Any(e => e.Displayed),
-            timeout: TimeSpan.FromSeconds(3));
+        {
+            var suggestions = Factory.FindElements<ILabel>(
+                By.CssSelector("div[role='listitem']"),
+                "Location suggestions");
+
+            return suggestions.Any(e => e.State.IsDisplayed);
+        }, TimeSpan.FromSeconds(3));
 
         if (!suggestionAppeared)
         {
@@ -92,9 +108,8 @@ public class MainPage : BasePage
 
         input2.SendKeys(Keys.Enter);
 
-        var driver = AqualityServices.Browser.Driver;
-        var logoElement = driver.FindElements(By.XPath("//a[@data-sentry-element='Logo']"))
-            .FirstOrDefault(e => e.Displayed && e.Enabled);
+        var logoButtons = Factory.FindElements<IButton>(By.XPath("//a[@data-sentry-element='Logo']"), "Logo buttons");
+        var logoElement = logoButtons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
         
         if (logoElement != null)
         {
@@ -106,7 +121,7 @@ public class MainPage : BasePage
                   
         var formReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var priceMin = FindFirstDisplayedElement(_priceFromInput);
+            var priceMin = FindFirstDisplayedTextBox(_priceFromInput);
             return priceMin != null && IsElementFullyInteractable(priceMin);
         }, TimeSpan.FromSeconds(5));
         
@@ -120,21 +135,17 @@ public class MainPage : BasePage
         
         var inputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var from = FindFirstDisplayedElement(_priceFromInput);
-            var to = FindFirstDisplayedElement(_priceToInput);
+            var from = FindFirstDisplayedTextBox(_priceFromInput);
+            var to = FindFirstDisplayedTextBox(_priceToInput);
             
             if (from == null || to == null) return false;
             if (!IsElementFullyInteractable(from) || !IsElementFullyInteractable(to)) return false;
             
-            var actions = new OpenQA.Selenium.Interactions.Actions(AqualityServices.Browser.Driver);
+            from.Click();
+            from.ClearAndType(min.ToString());
             
-            actions.MoveToElement(from).Click().Perform();
-            from.Clear();
-            from.SendKeys(min.ToString());
-            
-            actions.MoveToElement(to).Click().Perform();
-            to.Clear();
-            to.SendKeys(max.ToString());
+            to.Click();
+            to.ClearAndType(max.ToString());
             
             return true;
             
@@ -163,14 +174,14 @@ public class MainPage : BasePage
 
         var clickSucceeded = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var btn = FindFirstDisplayedElement(_searchButton);
+            var btn = FindFirstDisplayedButton(_searchButton);
             if (btn == null)
             {
                 Logger.Error("Search button not found");
                 return false;
             }
 
-            if (btn.Displayed && btn.Enabled)
+            if (btn.State.IsDisplayed && btn.State.IsEnabled)
             {
                 btn.Click();
                 return true;
@@ -188,20 +199,32 @@ public class MainPage : BasePage
         Logger.Error("Failed to click search button after waiting 5 seconds");
         return false;
     }
-    private IWebElement? FindFirstDisplayedElement(By locator) {
-
-        var a = AqualityServices.Browser.Driver.FindElements(locator);
-        return AqualityServices.Browser.Driver.FindElements(locator)
-            .FirstOrDefault(e => e.Displayed && e.Enabled);
-}
-
-    private bool IsElementFullyInteractable(IWebElement element)
+    
+    private ITextBox? FindFirstDisplayedTextBox(By locator)
     {
-        return element != null && AqualityServices.ConditionalWait.WaitFor(() =>
-            element.Displayed && element.Enabled &&
-            element.Size.Width > 5 && element.Size.Height > 5 &&
-            element.Location.X >= -50 && element.Location.Y >= -50,
-            TimeSpan.FromMilliseconds(200)
-        );
+        var textBoxes = Factory.FindElements<ITextBox>(locator, $"TextBox for {locator}");
+        return textBoxes.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+    }
+
+    private IButton? FindFirstDisplayedButton(By locator)
+    {
+        var buttons = Factory.FindElements<IButton>(locator, $"Button for {locator}");
+        return buttons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+    }
+
+    private bool IsElementFullyInteractable(IElement element)
+    {
+        if (element == null) return false;
+        
+        return AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var webElement = element.GetElement();
+            return element.State.IsDisplayed && 
+                   element.State.IsEnabled &&
+                   webElement.Size.Width > 5 && 
+                   webElement.Size.Height > 5 &&
+                   webElement.Location.X >= -50 && 
+                   webElement.Location.Y >= -50;
+        }, TimeSpan.FromMilliseconds(200));
     }
 }

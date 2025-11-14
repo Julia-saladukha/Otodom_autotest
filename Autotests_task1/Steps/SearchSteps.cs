@@ -1,8 +1,10 @@
 ﻿using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
-using NLog;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 using Autotests_task1.Helpers;
 
@@ -11,7 +13,9 @@ namespace Autotests_task1.Steps;
 [Binding]
 public class SearchSteps
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
+    
     private readonly MainPage _mainPage = new();
     private readonly ResultsPage _resultsPage = new();
     private readonly OfferDetailsPage _offerDetailsPage = new();
@@ -75,9 +79,9 @@ public class SearchSteps
             {
                 return true;
             }
-            var driver = AqualityServices.Browser.Driver;
-            var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"));
-            return listings.Any(e => e.Displayed);
+            
+            var listings = Factory.FindElements<IElement>(By.CssSelector("article, div[data-cy*='listing']"), "Listings");
+            return listings.Any(e => e.State.IsDisplayed);
         }, timeout: TimeSpan.FromSeconds(30));
 
         loaded.Should().BeTrue("Results page should load (URL changed or listings visible)");
@@ -97,12 +101,11 @@ public class SearchSteps
     {
         Logger.Info("Validating that results are shown for Warszawa with expected price filters");
         var browser = AqualityServices.Browser;
-        var driver = browser.Driver;
 
         var listingsPresent = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var listings = driver.FindElements(By.XPath("//dl[@data-sentry-component='DescriptionList']"));
-            return listings.Any(e => e.Displayed);
+            var listings = Factory.FindElements<IElement>(By.XPath("//dl[@data-sentry-component='DescriptionList']"), "Description lists");
+            return listings.Any(e => e.State.IsDisplayed);
         }, TimeSpan.FromSeconds(15));
         listingsPresent.Should().BeTrue("At least one listing should be visible");
 
@@ -113,8 +116,12 @@ public class SearchSteps
             Logger.Warn("URL does not contain 'warsz' - relying on filter inputs for validation");
         }
 
-        var minInput = driver.FindElements(By.CssSelector("input[data-cy='search.form.price.from']")).FirstOrDefault(e => e.Displayed);
-        var maxInput = driver.FindElements(By.CssSelector("input[data-cy='search.form.price.to']")).FirstOrDefault(e => e.Displayed);
+        var minInputs = Factory.FindElements<ITextBox>(By.CssSelector("input[data-cy='search.form.price.from']"), "Price min inputs");
+        var maxInputs = Factory.FindElements<ITextBox>(By.CssSelector("input[data-cy='search.form.price.to']"), "Price max inputs");
+        
+        var minInput = minInputs.FirstOrDefault(e => e.State.IsDisplayed);
+        var maxInput = maxInputs.FirstOrDefault(e => e.State.IsDisplayed);
+        
         if (minInput != null && maxInput != null)
         {
             Logger.Info($"Price inputs values: from='{minInput.GetAttribute("value")}' to='{maxInput.GetAttribute("value")}'");
@@ -123,7 +130,6 @@ public class SearchSteps
         browser.CurrentUrl.Should().NotBe("https://www.otodom.pl/", "Search should navigate or update state");
         Logger.Info("Search results validation (primary) completed");
     }
-
 
     [When("I analyze surface area from results and apply surface filter")]
     public void WhenIAnalyzeSurfaceAreaFromResultsAndApplySurfaceFilter()
@@ -146,18 +152,19 @@ public class SearchSteps
     public void ThenSearchResultsShouldContainApartmentsWithSurfaceAreaFiltersApplied()
     {
         Logger.Info("Validating that surface area filters are applied to search results");
-        var driver = AqualityServices.Browser.Driver;
 
         var listingsPresent = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"));
-            return listings.Any(e => e.Displayed);
+            var listings = Factory.FindElements<IElement>(By.CssSelector("article, div[data-cy*='listing']"), "Listings");
+            return listings.Any(e => e.State.IsDisplayed);
         }, TimeSpan.FromSeconds(15));
         
         listingsPresent.Should().BeTrue("At least one listing should be visible after surface filter");
 
-        var surfaceMinInput = driver.FindElements(By.CssSelector("input[data-cy*='surface'], input[name*='surface'], input[placeholder*='powierzchnia']"))
-            .FirstOrDefault(e => e.Displayed && !string.IsNullOrWhiteSpace(e.GetAttribute("value")));
+        var surfaceInputs = Factory.FindElements<ITextBox>(
+            By.CssSelector("input[data-cy*='surface'], input[name*='surface'], input[placeholder*='powierzchnia']"), 
+            "Surface inputs");
+        var surfaceMinInput = surfaceInputs.FirstOrDefault(e => e.State.IsDisplayed && !string.IsNullOrWhiteSpace(e.GetAttribute("value")));
         
         if (surfaceMinInput != null)
         {
@@ -227,9 +234,8 @@ public class SearchSteps
         var link = selectedListing.FindElements(By.TagName("a")).FirstOrDefault(l => l.Displayed);
         link.Should().NotBeNull("A clickable link should be found in the listing");
         
-        var driver = AqualityServices.Browser.Driver;
         Logger.Info("Removing target='_blank' attribute from link to ensure same-tab navigation");
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].removeAttribute('target');", link);
+        AqualityServices.Browser.ExecuteScript("arguments[0].removeAttribute('target');", link);
         
         link.Click();
         Logger.Info("Clicked on the selected offer");
@@ -256,11 +262,12 @@ public class SearchSteps
 
         isOfferPage.Should().BeTrue($"Should be on offer page, but current URL is: {currentUrl}");
         
-        var driver = AqualityServices.Browser.Driver;
         var hasOfferDetails = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var detailsElements = driver.FindElements(By.CssSelector("main, .offer-details, [data-cy*='offer'], [data-cy*='ad']"));
-            return detailsElements.Any(e => e.Displayed);
+            var detailsElements = Factory.FindElements<IElement>(
+                By.CssSelector("main, .offer-details, [data-cy*='offer'], [data-cy*='ad']"), 
+                "Offer details");
+            return detailsElements.Any(e => e.State.IsDisplayed);
         }, TimeSpan.FromSeconds(10));
 
         hasOfferDetails.Should().BeTrue("Offer page should contain offer details elements");
@@ -321,21 +328,17 @@ public class SearchSteps
         Logger.Info("Performing detailed validation of search results");
         
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
-        
-        var driver = AqualityServices.Browser.Driver;
 
         var hasListings = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var elements = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-                .Where(e => e.Displayed)
-                .ToList();
-            return elements.Count > 0;
+            var elements = Factory.FindElements<IElement>(By.CssSelector("article, div[data-cy*='listing']"), "Listings");
+            return elements.Count(e => e.State.IsDisplayed) > 0;
         }, TimeSpan.FromSeconds(10));
 
         hasListings.Should().BeTrue("There should be at least one visible listing");
         
-        var listings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-            .Where(e => e.Displayed)
+        var listings = Factory.FindElements<IElement>(By.CssSelector("article, div[data-cy*='listing']"), "Listings")
+            .Where(e => e.State.IsDisplayed)
             .ToList();
         
         Logger.Info($"Found {listings.Count} visible listings to validate");
@@ -343,14 +346,15 @@ public class SearchSteps
         var validListings = 0;
         for (int i = 0; i < Math.Min(5, listings.Count); i++)
         {
-            var currentListings = driver.FindElements(By.CssSelector("article, div[data-cy*='listing']"))
-                .Where(e => e.Displayed)
+            var currentListings = Factory.FindElements<IElement>(By.CssSelector("article, div[data-cy*='listing']"), "Listings")
+                .Where(e => e.State.IsDisplayed)
                 .ToList();
         
             if (i >= currentListings.Count) break;
         
             var listing = currentListings[i];
-            var hasValidContent = listing.FindElements(By.CssSelector("h2,h3,a[title],a[data-cy*='title'],span[data-cy*='title']"))
+            var listingElement = listing.GetElement();
+            var hasValidContent = listingElement.FindElements(By.CssSelector("h2,h3,a[title],a[data-cy*='title'],span[data-cy*='title']"))
                 .Any(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
         
             if (hasValidContent) validListings++;

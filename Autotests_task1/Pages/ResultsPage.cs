@@ -81,23 +81,23 @@ public class ResultsPage : BasePage
     public bool WaitForListings(TimeSpan timeout)
     {
         Logger.Info("Waiting for listings to load");
-        return AqualityServices.ConditionalWait.WaitFor(() =>
-        {
-            var driver = AqualityServices.Browser.Driver;
-            return GetListingElements().Any();
-        }, timeout);
+        return AqualityServices.ConditionalWait.WaitFor(() => GetListingElements().Any(), timeout);
     }
 
     public IList<IWebElement> GetListingElements()
     {
-        var driver = AqualityServices.Browser.Driver;
         foreach (var locator in _listingLocators)
         {
-            var elements = driver.FindElements(locator).Where(e => e.Displayed).ToList();
-            if (elements.Any())
+            var elements = Factory.FindElements<IElement>(locator, $"Listing elements for {locator}");
+            var displayedElements = elements.Where(e => e.State.IsDisplayed)
+                .Select(e => e.GetElement())
+                .Cast<IWebElement>()
+                .ToList();
+            
+            if (displayedElements.Any())
             {
-                Logger.Debug($"Found {elements.Count} listings using locator: {locator}");
-                return elements;
+                Logger.Debug($"Found {displayedElements.Count} listings using locator: {locator}");
+                return displayedElements;
             }
         }
         return new List<IWebElement>();
@@ -393,12 +393,13 @@ public class ResultsPage : BasePage
     public void ClearPriceFilter()
     {
         Logger.Info("Clearing price filter");
-        var driver = AqualityServices.Browser.Driver;
         bool cleared = false;
 
         foreach (var locator in _priceClearLocators)
         {
-            var clearButton = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
+            var clearButtons = Factory.FindElements<IButton>(locator, $"Clear buttons for {locator}");
+            var clearButton = clearButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+            
             if (clearButton != null)
             {
                 clearButton.Click();
@@ -411,10 +412,13 @@ public class ResultsPage : BasePage
         if (!cleared)
         {
             Logger.Info("Clear button not found, clearing price input fields directly");
-            var priceInputs = driver.FindElements(By.CssSelector("input[data-cy*='price'], input[name*='price']"));
-            foreach (var input in priceInputs.Where(i => i.Displayed && i.Enabled))
+            var priceInputs = Factory.FindElements<ITextBox>(
+                By.CssSelector("input[data-cy*='price'], input[name*='price']"), 
+                "Price inputs");
+            
+            foreach (var input in priceInputs.Where(i => i.State.IsDisplayed && i.State.IsEnabled))
             {
-                input.Clear();
+                input.ClearAndType("");
                 Logger.Debug("Cleared price input field");
                 cleared = true;
             }
@@ -434,12 +438,11 @@ public class ResultsPage : BasePage
     public void SetSurfaceRange(int min, int max)
     {
         Logger.Info($"Setting surface range: {min} - {max} m²");
-        var driver = AqualityServices.Browser.Driver;
 
         var surfaceInputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
-            var maxInput = FindFirstDisplayedElement(driver, _surfaceMaxInputLocators);
+            var minInput = FindFirstDisplayedTextBox(_surfaceMinInputLocators);
+            var maxInput = FindFirstDisplayedTextBox(_surfaceMaxInputLocators);
             return minInput != null && maxInput != null && 
                    IsElementFullyInteractable(minInput) && IsElementFullyInteractable(maxInput);
         }, TimeSpan.FromSeconds(15));
@@ -450,8 +453,8 @@ public class ResultsPage : BasePage
             return;
         }
 
-        var minInput = FindFirstDisplayedElement(driver, _surfaceMinInputLocators);
-        var maxInput = FindFirstDisplayedElement(driver, _surfaceMaxInputLocators);
+        var minInput = FindFirstDisplayedTextBox(_surfaceMinInputLocators);
+        var maxInput = FindFirstDisplayedTextBox(_surfaceMaxInputLocators);
 
         if (minInput == null || maxInput == null)
         {
@@ -460,22 +463,18 @@ public class ResultsPage : BasePage
         }
 
         Logger.Info("Setting minimum surface...");
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", minInput);
+        minInput.JsActions.ScrollIntoView();
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         
-        minInput.Clear();
-        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
-        minInput.SendKeys(min.ToString());
+        minInput.ClearAndType(min.ToString());
         Logger.Info($"Set minimum surface: {min}m²");
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
 
         Logger.Info("Setting maximum surface...");
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", maxInput);
+        maxInput.JsActions.ScrollIntoView();
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
         
-        maxInput.Clear();
-        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
-        maxInput.SendKeys(max.ToString());
+        maxInput.ClearAndType(max.ToString());
         Logger.Info($"Set maximum surface: {max}m²");
 
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
@@ -487,19 +486,20 @@ public class ResultsPage : BasePage
         SetSurfaceRange((int)Math.Round(min), (int)Math.Round(max));
     }
 
-    private bool IsElementFullyInteractable(IWebElement element)
+    private bool IsElementFullyInteractable(IElement element)
     {
         if (element == null) return false;
         
         var interactable = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var displayed = element.Displayed;
-            var enabled = element.Enabled;
-            var hasSize = element.Size.Height > 0 && element.Size.Width > 0;
-            var location = element.Location;
-            var size = element.Size;
+            var webElement = element.GetElement();
+            var displayed = element.State.IsDisplayed;
+            var enabled = element.State.IsEnabled;
+            var hasSize = webElement.Size.Height > 0 && webElement.Size.Width > 0;
+            var location = webElement.Location;
+            var size = webElement.Size;
             var inViewport = location.X >= -50 && location.Y >= -50 && size.Width > 5 && size.Height > 5;
-            _ = element.TagName;
+            _ = webElement.TagName;
             return displayed && enabled && hasSize && inViewport;
         }, TimeSpan.FromMilliseconds(100));
         
@@ -510,9 +510,8 @@ public class ResultsPage : BasePage
     public void Search()
     {
         Logger.Info("Clicking search button to apply filters");
-        var driver = AqualityServices.Browser.Driver;
 
-        var searchButton = FindFirstDisplayedElement(driver, _searchButtonLocators);
+        var searchButton = FindFirstDisplayedButton(_searchButtonLocators);
         if (searchButton != null)
         {
             searchButton.Click();
@@ -525,11 +524,29 @@ public class ResultsPage : BasePage
         }
     }
 
-    private IWebElement? FindFirstDisplayedElement(IWebDriver driver, IEnumerable<By> locators)
+    private ITextBox? FindFirstDisplayedTextBox(IEnumerable<By> locators)
     {
         foreach (var locator in locators)
         {
-            var element = driver.FindElements(locator).FirstOrDefault(e => e.Displayed && e.Enabled);
+            var textBoxes = Factory.FindElements<ITextBox>(locator, $"TextBox for {locator}");
+            var element = textBoxes.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+            
+            if (element != null)
+            {
+                Logger.Debug($"Found element using locator: {locator}");
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private IButton? FindFirstDisplayedButton(IEnumerable<By> locators)
+    {
+        foreach (var locator in locators)
+        {
+            var buttons = Factory.FindElements<IButton>(locator, $"Button for {locator}");
+            var element = buttons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+            
             if (element != null)
             {
                 Logger.Debug($"Found element using locator: {locator}");

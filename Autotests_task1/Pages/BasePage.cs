@@ -1,6 +1,8 @@
 using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Forms;
 using Aquality.Selenium.Core.Logging;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Pages;
@@ -8,6 +10,7 @@ namespace Autotests_task1.Pages;
 public abstract class BasePage : Form
 {
     private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    protected static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
 
     protected BasePage(By locator, string name) : base(locator, name) {}
 
@@ -17,15 +20,17 @@ public abstract class BasePage : Form
     {
         if (!AqualityServices.IsBrowserStarted) return;
 
-        var driver = AqualityServices.Browser.Driver;
-        var btn = driver.FindElements(_cookieAcceptButton).FirstOrDefault(e => e.Displayed && e.Enabled);
+        var cookieButtons = Factory.FindElements<IButton>(_cookieAcceptButton, "Cookie accept buttons");
+        var btn = cookieButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+        
         if (btn == null) return;
 
         Logger.Info("Cookie consent popup detected. Accepting cookies.");
 
         var clicked = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            var cookieBtn = driver.FindElements(_cookieAcceptButton).FirstOrDefault(e => e.Displayed && e.Enabled);
+            var buttons = Factory.FindElements<IButton>(_cookieAcceptButton, "Cookie buttons");
+            var cookieBtn = buttons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
             if (cookieBtn == null) return true;
 
             cookieBtn.Click();
@@ -35,7 +40,7 @@ public abstract class BasePage : Form
         if (!clicked)
         {
             Logger.Warn("Standard click failed for cookie button, trying JS");
-            AqualityServices.Browser.ExecuteScript("arguments[0].click();", btn);
+            btn.JsActions.Click();
             Logger.Info("Cookie consent accepted via JS click.");
         }
         else

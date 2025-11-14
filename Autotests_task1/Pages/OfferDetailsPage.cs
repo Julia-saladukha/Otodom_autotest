@@ -28,10 +28,9 @@ public class OfferDetailsPage : BasePage
 
     private int? GetPriceWithFallback()
     {
-        var driver = AqualityServices.Browser.Driver;
         var priceSelector = By.CssSelector("span[data-cy='adPageHeaderPrice']");
-        var element = driver.FindElements(priceSelector)
-                            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
+        var priceElements = Factory.FindElements<ILabel>(priceSelector, "Price labels");
+        var element = priceElements.FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
         if (element == null)
         {
@@ -57,19 +56,19 @@ public class OfferDetailsPage : BasePage
         return null;
     }
 
-    private bool SafeIsDisplayedAndAlive(IWebElement element)
+    private bool SafeIsDisplayedAndAlive(IElement element)
     {
         return AqualityServices.ConditionalWait.WaitFor(() =>
-            element.Displayed && element.TagName != null,
-            TimeSpan.FromMilliseconds(100));
+        {
+            return element.State.IsDisplayed && element.GetElement().TagName != null;
+        }, TimeSpan.FromMilliseconds(100));
     }
 
     private double? GetSurfaceWithFallback()
     {
-        var driver = AqualityServices.Browser.Driver;
         var surfaceSelector = By.XPath("//*[@data-sentry-element='ItemGridContainer']//*[contains(translate(text(),'²М','2M'),'m2')]");
-        var element = driver.FindElements(surfaceSelector)
-            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
+        var surfaceElements = Factory.FindElements<ILabel>(surfaceSelector, "Surface labels");
+        var element = surfaceElements.FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
         if (element == null)
         {
@@ -97,10 +96,9 @@ public class OfferDetailsPage : BasePage
 
     private int? GetRoomsWithFallback()
     {
-        var driver = AqualityServices.Browser.Driver;
         var roomsSelector = By.XPath("//*[contains(text(),'pokoi') or contains(text(),'pokoje') or contains(text(),'rooms')]");
-        var element = driver.FindElements(roomsSelector)
-                            .FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
+        var roomsElements = Factory.FindElements<ILabel>(roomsSelector, "Rooms labels");
+        var element = roomsElements.FirstOrDefault(e => e != null && SafeIsDisplayedAndAlive(e));
 
         if (element == null)
         {

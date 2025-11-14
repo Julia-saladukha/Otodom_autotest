@@ -1,4 +1,6 @@
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
@@ -12,6 +14,7 @@ namespace Autotests_task1.Steps;
 public class CommonSteps
 {
     private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
     private static readonly string BaseUrl = ConfigHelper.GetBaseUrl();
     private static readonly string LoginUrl = ConfigHelper.GetLoginUrl();
 
@@ -45,7 +48,9 @@ public class CommonSteps
     {
         Logger.Info("Executing step: I accept cookies if popup appears");
         _mainPage.AcceptCookiesIfPresent();
-        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        
+        Logger.Info("Waiting for page to stabilize after cookie acceptance...");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
     }
 
     [When("I authorize user")]
@@ -60,24 +65,22 @@ public class CommonSteps
             ? $"{username.Substring(0, Math.Min(2, username.IndexOf('@')))}{new string('*', Math.Max(0, username.IndexOf('@') - 2))}@{username.Split('@')[1]}"
             : "***";
         Logger.Info($"Credentials loaded successfully for user: {maskedUsername}");
+        Logger.Info("Waiting for page to stabilize before opening login...");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
         
         var opened = _mainPage.OpenLogin();
-        if (!opened)
-        {
-            Logger.Warn("Login trigger not found. Continuing without login.");
-            return;
-        }
-
+        opened.Should().BeTrue("Login button must be present after cookie acceptance. Check if cookies were properly closed and page is stable.");
+        
         bool onLogin = AqualityServices.ConditionalWait.WaitFor(() =>
-            AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host) ||
-            AqualityServices.Browser.Driver.FindElements(By.Id("username")).Any(), 
-            timeout: TimeSpan.FromSeconds(10));
-
-        if (!onLogin)
         {
-            Logger.Error($"Login page did not load within timeout. Current URL: {AqualityServices.Browser.CurrentUrl}");
-            throw new Exception("Login page was not reached within 10 seconds.");
-        }
+            if (AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host))
+                return true;
+            
+            var usernameFields = Factory.FindElements<ITextBox>(By.Id("username"), "Username fields");
+            return usernameFields.Any(f => f.State.IsDisplayed);
+        }, timeout: TimeSpan.FromSeconds(10));
+
+        onLogin.Should().BeTrue($"Login page should load within 10 seconds. Current URL: {AqualityServices.Browser.CurrentUrl}");
         
         Logger.Info("Login page detected");
 
@@ -88,17 +91,20 @@ public class CommonSteps
             return;
         }
 
+
         Logger.Info("Submitting login credentials from configuration");
         _loginPage.Login(UserEmail, UserPassword);
         Logger.Info("Login credentials submitted successfully");
 
-        AqualityServices.ConditionalWait.WaitFor(() =>
+        var loggedIn = AqualityServices.ConditionalWait.WaitFor(() =>
             AqualityServices.Browser.CurrentUrl.Contains(new Uri(BaseUrl).Host) && 
             !AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host),
             timeout: TimeSpan.FromSeconds(15));
         
-        Logger.Info("Authorization step finished (best-effort).");
-
+        loggedIn.Should().BeTrue($"User should be redirected to main page after login. Current URL: {AqualityServices.Browser.CurrentUrl}");
+        
+        Logger.Info("Authorization completed successfully.");
+        
         AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
     }
 
