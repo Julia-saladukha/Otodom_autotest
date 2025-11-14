@@ -1,67 +1,57 @@
 using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Forms;
-using NLog;
+using Aquality.Selenium.Core.Logging;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Pages;
 
 public abstract class BasePage : Form
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    protected static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
 
     protected BasePage(By locator, string name) : base(locator, name) {}
 
-    private By SurveyCloseButton => By.CssSelector("[aria-label='Close'], button[aria-label='Zamknij']");
+    private readonly By _cookieAcceptButton = By.Id("onetrust-accept-btn-handler");
 
-    public void CloseSurveyPopupIfPresent()
+    public void CloseCookieIfPresent()
     {
-        try
+        if (!AqualityServices.IsBrowserStarted) return;
+
+        var cookieButtons = Factory.FindElements<IButton>(_cookieAcceptButton, "Cookie accept buttons");
+        var btn = cookieButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+        
+        if (btn == null) return;
+
+        Logger.Info("Cookie consent popup detected. Accepting cookies.");
+
+        var clicked = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            // Check if browser is still active before trying to interact
-            if (!AqualityServices.IsBrowserStarted) return;
-            
-            var driver = AqualityServices.Browser.Driver;
-            var closeBtn = driver.FindElements(SurveyCloseButton).FirstOrDefault(e => e.Displayed && e.Enabled);
-            if (closeBtn != null)
-            {
-                Logger.Info("Survey popup detected. Closing it.");
-                try
-                {
-                    closeBtn.Click();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Standard click on survey close button failed, trying JS");
-                    try
-                    {
-                        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", closeBtn);
-                    }
-                    catch (Exception jsEx)
-                    {
-                        Logger.Error(jsEx, "Failed to close survey popup via JS");
-                    }
-                }
-            }
+            var buttons = Factory.FindElements<IButton>(_cookieAcceptButton, "Cookie buttons");
+            var cookieBtn = buttons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+            if (cookieBtn == null) return true;
+
+            cookieBtn.Click();
+            return true;
+        }, TimeSpan.FromSeconds(2));
+
+        if (!clicked)
+        {
+            Logger.Warn("Standard click failed for cookie button, trying JS");
+            btn.JsActions.Click();
+            Logger.Info("Cookie consent accepted via JS click.");
         }
-        catch (Exception ex)
+        else
         {
-            Logger.Debug(ex, "Error while attempting to close survey popup (ignored)");
+            Logger.Info("Cookie consent accepted.");
         }
     }
 
     public void HandlePopupsIfPresent()
     {
-        try
-        {
-            // Only handle popups if browser is still running
-            if (AqualityServices.IsBrowserStarted)
-            {
-                CloseSurveyPopupIfPresent();
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Debug(ex, "Popup handling failed, continuing");
-        }
+        if (!AqualityServices.IsBrowserStarted) return;
+        CloseCookieIfPresent();
     }
 }

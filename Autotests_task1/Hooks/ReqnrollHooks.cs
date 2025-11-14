@@ -1,6 +1,6 @@
-using NLog;
 using Reqnroll;
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Core.Logging;
 using Autotests_task1.Pages;
 
 namespace Autotests_task1.Hooks;
@@ -8,7 +8,7 @@ namespace Autotests_task1.Hooks;
 [Binding]
 public class ReqnrollHooks
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
     private readonly ScenarioContext _scenarioContext;
 
     public ReqnrollHooks(ScenarioContext scenarioContext)
@@ -19,21 +19,19 @@ public class ReqnrollHooks
     [BeforeTestRun]
     public static void BeforeTestRun()
     {
-        LogManager.Setup().LoadConfigurationFromFile("nlog.config", optional: true);
+        Logger.Info("Test run started");
     }
 
     [BeforeScenario(Order = 0)]
     public void PrepareBrowserAndHighlighting()
     {
-        Logger.Info("Preparing browser for scenario");
+        Logger.Info("Preparing browser for scenario (clear cookies, maximize)");
         if (AqualityServices.IsBrowserStarted)
         {
             AqualityServices.Browser.Driver.Manage().Cookies.DeleteAllCookies();
-            // Removed refresh that can cause DOM invalidation
         }
         else
         {
-            // Accessing Browser property will start browser lazily
             _ = AqualityServices.Browser;
         }
         AqualityServices.Browser.Maximize();
@@ -43,19 +41,22 @@ public class ReqnrollHooks
     [BeforeStep(Order = -10)]
     public void HandlePopups()
     {
-        try
+        if (!AqualityServices.IsBrowserStarted) return;
+        
+        var page = new MainPage();
+        var handledSuccessfully = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            // Only handle popups if browser is still active
-            if (AqualityServices.IsBrowserStarted)
-            {
-                // Use any known page root (body) to attempt popup handling
-                var basePage = new MainPage(); // lightweight instantiation just for popup checks
-                basePage.HandlePopupsIfPresent();
-            }
+            page.HandlePopupsIfPresent();
+            return true;
+        }, TimeSpan.FromMilliseconds(100));
+        
+        if (handledSuccessfully)
+        {
+            Logger.Info("Checked for popups before step");
         }
-        catch (Exception ex)
+        else
         {
-            Logger.Debug(ex, "Popup handling before step ignored due to exception");
+            Logger.Debug("Popup handling skipped (no browser or popups present)");
         }
     }
 
@@ -64,7 +65,7 @@ public class ReqnrollHooks
     {
         if (_scenarioContext.TestError != null)
         {
-            Logger.Error(_scenarioContext.TestError, "Scenario failed");
+            Logger.Error($"Scenario failed: {_scenarioContext.TestError.Message}");
         }
         Logger.Info($"Finishing scenario: {_scenarioContext.ScenarioInfo.Title}");
         if (AqualityServices.IsBrowserStarted)

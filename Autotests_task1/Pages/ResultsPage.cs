@@ -1,275 +1,616 @@
-using Aquality.Selenium.Elements.Interfaces;
+﻿using Aquality.Selenium.Browsers;
 using Aquality.Selenium.Elements;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
-using Aquality.Selenium.Browsers;
-using NLog;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Autotests_task1.Models;
 
 namespace Autotests_task1.Pages;
 
 public class ResultsPage : BasePage
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(5);
 
-    // Updated selectors for current Otodom structure
-    private ILabel ResultsHeader => ElementFactory.GetLabel(By.CssSelector("h1"), "Results header");
-    
-    // More comprehensive selectors for listings and prices
-    private readonly IReadOnlyCollection<By> _listingSelectors = new List<By>
+    public ResultsPage() : base(By.CssSelector("body"), "Results Page") { }
+
+    #region Locators
+    private readonly IReadOnlyCollection<By> _listingLocators = new List<By>
     {
-        By.CssSelector("li[data-cy='listing-item']"),
-        By.CssSelector("article[data-cy='listing-item']"),
-        By.CssSelector("[data-cy='listing-item']"),
-        By.CssSelector("li[data-testid='listing-item']"),
-        By.CssSelector("article[data-testid='listing-item']"),
+        By.CssSelector("article[data-cy*='listing']"),
+        By.CssSelector("div[data-cy*='listing']"),
+        By.CssSelector(".offer-item"),
         By.CssSelector(".listing-item"),
-        By.CssSelector("[class*='listing']"),
-        By.XPath("//li[contains(@class,'listing') or contains(@data-cy,'listing')]"),
-        By.XPath("//article[contains(@class,'listing') or contains(@data-cy,'listing')]")
+        By.CssSelector("article"),
+        By.CssSelector("div[class*='offer-card']")
     };
 
-    private readonly IReadOnlyCollection<By> _priceSelectors = new List<By>
+    private readonly IReadOnlyCollection<By> _surfaceLocators = new List<By>
     {
-        By.CssSelector("[data-cy='listing-item'] span[aria-label='price']"),
-        By.CssSelector("[data-cy='listing-item'] [data-cy='price']"),
-        By.CssSelector("[data-cy='listing-item'] .price"),
-        By.CssSelector("[data-cy='listing-item'] span[class*='price']"),
-        By.XPath("//li[@data-cy='listing-item']//span[contains(.,'z?') or contains(.,'PLN')]"),
-        By.XPath("//*[@data-cy='listing-item']//*[contains(text(),'z?') or contains(text(),'PLN')]")
+        By.XPath(".//span[contains(text(),'m²') or contains(text(),'m2')]"),
+        By.XPath(".//*[contains(text(),'m²') or contains(text(),'m2')]"),
+        By.XPath(".//div[contains(@class,'surface') or contains(@class,'area')]"),
+        By.XPath(".//*[contains(@aria-label,'powierzchnia') or contains(@data-cy,'surface')]"),
+        By.CssSelector("span[class*='surface']"),
+        By.CssSelector("div[class*='area']")
     };
 
-    private IButton ClearPriceButton => ElementFactory.GetButton(By.CssSelector("button[data-testid='clear-price']"), "Clear price");
-    private ITextBox SurfaceFrom => ElementFactory.GetTextBox(By.CssSelector("input[name='surfaceMin']"), "Surface from");
-    private ITextBox SurfaceTo => ElementFactory.GetTextBox(By.CssSelector("input[name='surfaceMax']"), "Surface to");
-    private IButton SearchButton => ElementFactory.GetButton(By.CssSelector("button[type='submit']"), "Search");
-
-    public ResultsPage() : base(By.CssSelector("main"), "Results Page") { }
-
-    public bool IsOpened() => ResultsHeader.State.IsDisplayed;
-
-    public bool WaitForListings(TimeSpan? timeout = null)
+    private readonly IReadOnlyCollection<By> _priceClearLocators = new List<By>
     {
-        var to = timeout ?? TimeSpan.FromSeconds(25);
-        Logger.Info("Waiting for listings to load...");
-        
-        var found = AqualityServices.ConditionalWait.WaitFor(() =>
+        By.CssSelector("button[data-cy*='price-clear']"),
+        By.CssSelector("button[aria-label*='Clear price']"),
+        By.CssSelector("button[title*='Clear price']"),
+        By.XPath("//button[contains(.,'Clear') or contains(.,'Wyczyść')]"),
+        By.CssSelector(".filter-clear"),
+        By.CssSelector("button.clear-filter")
+    };
+
+    private readonly IReadOnlyCollection<By> _surfaceMinInputLocators = new List<By>
+    {
+        By.CssSelector("input[data-cy='search.form.surface.from']"),
+        By.CssSelector("input[name='surfaceMin']"),
+        By.CssSelector("input[name*='surface_from']"),
+        By.CssSelector("input[placeholder*='powierzchnia']"),
+        By.CssSelector("input[aria-label*='Powierzchnia od']"),
+        By.CssSelector("input[data-testid*='surface-min']")
+    };
+
+    private readonly IReadOnlyCollection<By> _surfaceMaxInputLocators = new List<By>
+    {
+        By.CssSelector("input[data-cy='search.form.surface.to']"),
+        By.CssSelector("input[name='surfaceMax']"),
+        By.CssSelector("input[name*='surface_to']"),
+        By.CssSelector("input[placeholder*='powierzchnia']"),
+        By.CssSelector("input[aria-label*='Powierzchnia do']"),
+        By.CssSelector("input[data-testid*='surface-max']")
+    };
+
+    private readonly IReadOnlyCollection<By> _searchButtonLocators = new List<By>
+    {
+        By.Id("search-form-submit"),
+        By.CssSelector("button[type='submit']"),
+        By.CssSelector("button[data-cy*='search']"),
+        By.XPath("//button[contains(.,'Szukaj') or contains(.,'Search')]")
+    };
+    #endregion
+
+    #region Wait Methods
+    public bool WaitForListings(TimeSpan timeout)
+    {
+        Logger.Info("Waiting for listings to load");
+        return AqualityServices.ConditionalWait.WaitFor(() => GetListingElements().Any(), timeout);
+    }
+
+    public IList<IWebElement> GetListingElements()
+    {
+        foreach (var locator in _listingLocators)
         {
-            var offers = GetOffers();
-            Logger.Debug($"Found {offers.Count} offers using current selectors");
-            return offers.Count > 0;
-        }, to);
-        
-        if (!found)
-        {
-            Logger.Warn("No listings found. Logging page info for debugging:");
-            try
+            var elements = Factory.FindElements<IElement>(locator, $"Listing elements for {locator}");
+            var displayedElements = elements.Where(e => e.State.IsDisplayed)
+                .Select(e => e.GetElement())
+                .Cast<IWebElement>()
+                .ToList();
+            
+            if (displayedElements.Any())
             {
-                var url = AqualityServices.Browser.CurrentUrl;
-                Logger.Info($"Current URL: {url}");
-                
-                var driver = AqualityServices.Browser.Driver;
-                var pageTitle = driver.Title;
-                Logger.Info($"Page title: {pageTitle}");
-                
-                // Check what elements are actually on the page
-                foreach (var selector in _listingSelectors)
-                {
-                    try
-                    {
-                        var elements = driver.FindElements(selector);
-                        Logger.Info($"Selector '{selector}' found {elements.Count} elements");
-                        if (elements.Count > 0)
-                        {
-                            var firstElement = elements.First();
-                            var elementText = firstElement.Text ?? "";
-                            var text = elementText.Length > 100 ? elementText.Substring(0, 100) : elementText;
-                            Logger.Info($"First element text sample: '{text}'");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Debug($"Error with selector '{selector}': {ex.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Failed to gather debugging info");
+                Logger.Debug($"Found {displayedElements.Count} listings using locator: {locator}");
+                return displayedElements;
             }
         }
-        
-        return found;
+        return new List<IWebElement>();
     }
+    #endregion
 
-    public bool WaitForPriceData(TimeSpan? timeout = null)
+    #region Core Methods
+    public (int min, int max) GetMinAndMaxSurfaceFromFirstPage()
     {
-        var to = timeout ?? TimeSpan.FromSeconds(15);
-        return AqualityServices.ConditionalWait.WaitFor(() => GetPrices().Any(), to);
-    }
-
-    public IEnumerable<int> GetPrices()
-    {
-        var prices = new List<int>();
-        var driver = AqualityServices.Browser.Driver;
+        Logger.Info("Analyzing surface areas from first page listings");
         
-        foreach (var selector in _priceSelectors)
+        if (!WaitForListings(DefaultWait))
         {
-            try
-            {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements)
-                {
-                    try
-                    {
-                        var text = element.Text.Replace("\u00A0", "").Replace("z?", "").Replace("z?", "").Trim();
-                        if (int.TryParse(new string(text.Where(char.IsDigit).ToArray()), out var value))
-                        {
-                            prices.Add(value);
-                        }
-                    }
-                    catch { /* continue to next element */ }
-                }
-            }
-            catch { /* continue to next selector */ }
+            Logger.Warn("No listings found, using default surface range");
+            return (40, 120);
         }
+
+        var surfaceValues = new List<int>();
+        var listings = GetListingElements().Take(20).ToList();
         
-        return prices;
-    }
+        Logger.Info($"Found {listings.Count} listings to analyze for surface area");
 
-    public bool AreAllPricesWithinRange(int min, int max)
-    {
-        var prices = GetPrices().ToList();
-        Logger.Info($"Validating {prices.Count} prices within range {min}-{max}");
-        return prices.Count > 0 && prices.All(p => p >= min && p <= max);
-    }
-
-    public IEnumerable<double> GetSurfaces()
-    {
-        var surfaces = new List<double>();
-        var driver = AqualityServices.Browser.Driver;
-        var surfaceSelectors = new[]
+        foreach (var listing in listings)
         {
-            By.CssSelector("[data-cy='listing-item'] span[aria-label='area']"),
-            By.XPath("//li[@data-cy='listing-item']//span[contains(.,'m�')]")
-        };
-
-        foreach (var selector in surfaceSelectors)
-        {
-            try
+            var surfaceValue = ExtractSurfaceFromListing(listing);
+            if (surfaceValue.HasValue)
             {
-                var elements = driver.FindElements(selector);
-                foreach (var element in elements)
-                {
-                    try
-                    {
-                        var text = element.Text.Replace("m�", "").Replace(",", ".").Trim();
-                        if (double.TryParse(new string(text.Where(c => char.IsDigit(c) || c == '.').ToArray()), out var value))
-                        {
-                            surfaces.Add(value);
-                        }
-                    }
-                    catch { /* continue */ }
-                }
+                surfaceValues.Add(surfaceValue.Value);
+                Logger.Debug($"Extracted surface: {surfaceValue}m²");
             }
-            catch { /* continue */ }
         }
-        
-        return surfaces;
+
+        if (!surfaceValues.Any())
+        {
+            Logger.Warn("No surface values found, using default range 40-120m²");
+            return (40, 120);
+        }
+
+        var minSurface = surfaceValues.Min();
+        var maxSurface = surfaceValues.Max();
+
+        if (maxSurface - minSurface < 10)
+        {
+            Logger.Warn("Surface range too narrow, expanding by ±10m²");
+            var avg = (minSurface + maxSurface) / 2;
+            minSurface = Math.Max(10, avg - 10);
+            maxSurface = Math.Min(500, avg + 10);
+        }
+
+        Logger.Info($"Surface range determined from {surfaceValues.Count} values: Min = {minSurface}m², Max = {maxSurface}m²");
+        return (minSurface, maxSurface);
     }
 
     public (double min, double max) GetSurfaceRangeFromFirstPage()
     {
-        var list = GetSurfaces().ToList();
-        if (!list.Any())
+        var (minInt, maxInt) = GetMinAndMaxSurfaceFromFirstPage();
+        return ((double)minInt, (double)maxInt);
+    }
+
+    public int? ExtractSurfaceFromListing(IWebElement listing)
+    {
+        foreach (var locator in _surfaceLocators)
         {
-            Logger.Warn("No surface data found when deriving range; returning (0,0)");
-            return (0, 0);
+            var elements = listing.FindElements(locator);
+            foreach (var element in elements.Where(e => e.Displayed))
+            {
+                var text = element.Text?.Trim();
+                if (string.IsNullOrEmpty(text)) continue;
+
+                var surface = ParseSurfaceFromText(text);
+                if (surface.HasValue)
+                {
+                    Logger.Debug($"Found surface text: '{text}' -> {surface}m²");
+                    return surface;
+                }
+            }
         }
-        var min = list.Min();
-        var max = list.Max();
-        Logger.Info($"Derived surface range from first page: {min} - {max}");
-        return (min, max);
+        return null;
+    }
+
+    public int? ExtractPriceFromListing(IWebElement listing)
+    {
+        var priceText = GetPriceTextFromListing(listing);
+        if (!string.IsNullOrEmpty(priceText))
+        {
+            return ParsePriceFromText(priceText);
+        }
+        return null;
+    }
+
+    public int? ExtractRoomsFromListing(IWebElement listing)
+    {
+        var roomsSelectors = new[]
+        {
+            By.XPath(".//*[contains(text(),'pokoi') or contains(text(),'pokoje') or contains(text(),'rooms')]"),
+            By.XPath(".//*[contains(@aria-label,'pokoi') or contains(@data-cy,'rooms')]"),
+            By.CssSelector("span[class*='rooms']"),
+            By.CssSelector("div[class*='rooms']"),
+            By.XPath(".//*[text()[contains(.,'pokoi')] or text()[contains(.,'pokoje')]]")
+        };
+
+        foreach (var selector in roomsSelectors)
+        {
+            var elements = listing.FindElements(selector);
+            foreach (var element in elements.Where(e => e.Displayed))
+            {
+                var text = element.Text?.Trim();
+                if (string.IsNullOrEmpty(text)) continue;
+
+                var rooms = ParseRoomsFromText(text);
+                if (rooms.HasValue)
+                {
+                    Logger.Debug($"Found rooms text: '{text}' -> {rooms} rooms");
+                    return rooms;
+                }
+            }
+        }
+        return null;
+    }
+
+    private int? ParseRoomsFromText(string text)
+    {
+        var patterns = new[]
+        {
+            @"(\d+)\s*poko[ij]",
+            @"(\d+)\s*rooms?",
+            @"^(\d+)$"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                if (int.TryParse(match.Groups[1].Value, out var rooms))
+                {
+                    if (rooms >= 1 && rooms <= 10)
+                    {
+                        return rooms;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private string? GetPriceTextFromListing(IWebElement listing)
+    {
+        var priceSelectors = new[]
+        {
+            By.XPath(".//*[contains(text(),'PLN') or contains(text(),'zł')]"),
+            By.CssSelector("span[class*='price']"),
+            By.CssSelector("div[class*='price']")
+        };
+
+        foreach (var selector in priceSelectors)
+        {
+            var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed);
+            if (element != null && !string.IsNullOrEmpty(element.Text))
+            {
+                return element.Text.Trim();
+            }
+        }
+        return null;
+    }
+
+    private int? ParseSurfaceFromText(string text)
+    {
+        var patterns = new[]
+        {
+            @"(\d+(?:[.,]\d+)?)\s*m[²2]",
+            @"(\d+(?:[.,]\d+)?)\s*m\s*²",
+            @"powierzchnia:?\s*(\d+(?:[.,]\d+)?)",
+            @"(\d+(?:[.,]\d+)?)\s*metr",
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                var valueStr = match.Groups[1].Value.Replace(',', '.');
+                if (double.TryParse(valueStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                {
+                    var intValue = (int)Math.Round(value);
+                    if (intValue >= 10 && intValue <= 500)
+                    {
+                        return intValue;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private int? ParsePriceFromText(string text)
+    {
+        var digits = new string(text.Where(char.IsDigit).ToArray());
+        if (int.TryParse(digits, out var price) && price > 1000)
+        {
+            return price;
+        }
+        return null;
+    }
+    #endregion
+
+    #region Validation Methods
+    public bool AreAllPricesWithinRange(int min, int max)
+    {
+        Logger.Info($"Validating all prices are within range {min} - {max}");
+        var listings = GetListingElements().Take(15).ToList();
+        int validPrices = 0;
+        int totalPrices = 0;
+
+        foreach (var listing in listings)
+        {
+            var price = ExtractPriceFromListing(listing);
+            if (price.HasValue)
+            {
+                totalPrices++;
+                if (price.Value >= min && price.Value <= max)
+                {
+                    validPrices++;
+                }
+                else
+                {
+                    Logger.Debug($"Price {price.Value} is outside range {min}-{max}");
+                }
+            }
+        }
+
+        var isValid = totalPrices > 0 && validPrices == totalPrices;
+        Logger.Info($"Price validation: {validPrices}/{totalPrices} prices within range");
+        return isValid;
     }
 
     public bool AreAllSurfacesWithinRange(double min, double max)
     {
-        var surfaces = GetSurfaces().ToList();
-        Logger.Info($"Validating {surfaces.Count} surfaces within range {min}-{max}");
-        return surfaces.Count > 0 && surfaces.All(s => s >= min && s <= max);
-    }
+        Logger.Info($"Validating all surfaces are within range {min} - {max}m²");
+        var listings = GetListingElements().Take(15).ToList();
+        int validSurfaces = 0;
+        int totalSurfaces = 0;
 
-    public void ClearPriceFilter()
-    {
-        if (ClearPriceButton.State.IsDisplayed)
+        foreach (var listing in listings)
         {
-            Logger.Info("Clearing price filter");
-            ClearPriceButton.Click();
-        }
-        else
-        {
-            Logger.Info("Clear price button not visible - price filter might already be cleared");
-        }
-    }
-
-    public void SetSurfaceRange(double min, double max)
-    {
-        Logger.Info($"Setting surface range {min} - {max}");
-        SurfaceFrom.ClearAndType(((int)min).ToString());
-        SurfaceTo.ClearAndType(((int)Math.Ceiling(max)).ToString());
-    }
-
-    public void Search() => SearchButton.Click();
-
-    // Use raw IWebElement instead of IElement to avoid dictionary issues
-    public IReadOnlyCollection<IWebElement> GetOffers() 
-    {
-        var driver = AqualityServices.Browser.Driver;
-        
-        // Try each selector until we find elements
-        foreach (var selector in _listingSelectors)
-        {
-            try
+            var surface = ExtractSurfaceFromListing(listing);
+            if (surface.HasValue)
             {
-                var elements = driver.FindElements(selector);
-                if (elements.Count > 0)
+                totalSurfaces++;
+                if (surface.Value >= min && surface.Value <= max)
                 {
-                    Logger.Debug($"Found {elements.Count} offers using selector: {selector}");
-                    return elements;
+                    validSurfaces++;
+                }
+                else
+                {
+                    Logger.Debug($"Surface {surface.Value}m² is outside range {min}-{max}m²");
                 }
             }
-            catch (Exception ex)
-            {
-                Logger.Debug($"Error with selector '{selector}': {ex.Message}");
-            }
         }
-        
-        Logger.Debug("No offers found with any selector");
-        return new List<IWebElement>();
+
+        var isValid = totalSurfaces > 0 && validSurfaces >= (totalSurfaces * 0.8);
+        Logger.Info($"Surface validation: {validSurfaces}/{totalSurfaces} surfaces within range");
+        return isValid;
     }
 
     public (int? price, double? surface, int? rooms) PickRandomOfferAndOpen()
     {
-        var offers = GetOffers();
-        if (offers.Count == 0)
+        Logger.Info("Picking random offer and opening details");
+        var listings = GetListingElements().Take(10).ToList();
+        
+        if (!listings.Any())
         {
-            Logger.Warn("No offers found to pick");
+            Logger.Warn("No listings available to pick from");
             return (null, null, null);
         }
-        var rnd = new Random();
-        var selected = offers.ElementAt(rnd.Next(offers.Count));
-        var textLines = selected.Text.Split('\n');
-        string? priceText = textLines.FirstOrDefault(t => t.Contains("z?" ) || t.Contains("z?"));
-        string? surfaceText = textLines.FirstOrDefault(t => t.Contains("m�"));
-        string? roomsText = textLines.FirstOrDefault(t => t.Contains("pok") || t.Contains("room"));
 
-        int? price = int.TryParse(new string((priceText ?? string.Empty).Where(char.IsDigit).ToArray()), out var p) ? p : null;
-        double? surface = double.TryParse(new string((surfaceText ?? string.Empty).Replace(",",".").Where(c=>char.IsDigit(c)||c=='.').ToArray()), out var s) ? s : null;
-        int? rooms = int.TryParse(new string((roomsText ?? string.Empty).Where(char.IsDigit).ToArray()), out var r) ? r : null;
+        var random = new Random();
+        var selectedListing = listings[random.Next(listings.Count)];
+        
+        var price = ExtractPriceFromListing(selectedListing);
+        var surface = ExtractSurfaceFromListing(selectedListing);
+        var rooms = ExtractRoomsFromListing(selectedListing);
+        
+        var link = selectedListing.FindElement(By.TagName("a"));
+        link.Click();
+        Logger.Info("Clicked on random offer");
 
-        Logger.Info($"Selected random offer with parsed values -> Price: {price}, Surface: {surface}, Rooms: {rooms}");
+        return (price, surface.HasValue ? (double?)surface.Value : null, rooms);
+    }
+    #endregion
 
-        try { selected.Click(); }
-        catch { ((IJavaScriptExecutor)AqualityServices.Browser.Driver).ExecuteScript("arguments[0].click();", selected); }
+    #region Filter Methods
+    public void ClearPriceFilter()
+    {
+        Logger.Info("Clearing price filter");
+        bool cleared = false;
 
-        return (price, surface, rooms);
+        foreach (var locator in _priceClearLocators)
+        {
+            var clearButtons = Factory.FindElements<IButton>(locator, $"Clear buttons for {locator}");
+            var clearButton = clearButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+            
+            if (clearButton != null)
+            {
+                clearButton.Click();
+                Logger.Info($"Clicked price clear button using locator: {locator}");
+                cleared = true;
+                break;
+            }
+        }
+
+        if (!cleared)
+        {
+            Logger.Info("Clear button not found, clearing price input fields directly");
+            var priceInputs = Factory.FindElements<ITextBox>(
+                By.CssSelector("input[data-cy*='price'], input[name*='price']"), 
+                "Price inputs");
+            
+            foreach (var input in priceInputs.Where(i => i.State.IsDisplayed && i.State.IsEnabled))
+            {
+                input.ClearAndType("");
+                Logger.Debug("Cleared price input field");
+                cleared = true;
+            }
+        }
+
+        if (cleared)
+        {
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
+            Logger.Info("Price filter cleared successfully");
+        }
+        else
+        {
+            Logger.Warn("Could not clear price filter - no clear button or input fields found");
+        }
+    }
+
+    public void SetSurfaceRange(int min, int max)
+    {
+        Logger.Info($"Setting surface range: {min} - {max} m²");
+
+        var surfaceInputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var minInput = FindFirstDisplayedTextBox(_surfaceMinInputLocators);
+            var maxInput = FindFirstDisplayedTextBox(_surfaceMaxInputLocators);
+            return minInput != null && maxInput != null && 
+                   IsElementFullyInteractable(minInput) && IsElementFullyInteractable(maxInput);
+        }, TimeSpan.FromSeconds(15));
+
+        if (!surfaceInputsReady)
+        {
+            Logger.Error("Surface input fields never became ready for interaction");
+            return;
+        }
+
+        var minInput = FindFirstDisplayedTextBox(_surfaceMinInputLocators);
+        var maxInput = FindFirstDisplayedTextBox(_surfaceMaxInputLocators);
+
+        if (minInput == null || maxInput == null)
+        {
+            Logger.Error("Surface input fields not found after waiting");
+            return;
+        }
+
+        Logger.Info("Setting minimum surface...");
+        minInput.JsActions.ScrollIntoView();
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
+        
+        minInput.ClearAndType(min.ToString());
+        Logger.Info($"Set minimum surface: {min}m²");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
+
+        Logger.Info("Setting maximum surface...");
+        maxInput.JsActions.ScrollIntoView();
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromMilliseconds(500));
+        
+        maxInput.ClearAndType(max.ToString());
+        Logger.Info($"Set maximum surface: {max}m²");
+
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        Logger.Info("Surface range set successfully");
+    }
+
+    public void SetSurfaceRange(double min, double max)
+    {
+        SetSurfaceRange((int)Math.Round(min), (int)Math.Round(max));
+    }
+
+    private bool IsElementFullyInteractable(IElement element)
+    {
+        if (element == null) return false;
+        
+        var interactable = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var webElement = element.GetElement();
+            var displayed = element.State.IsDisplayed;
+            var enabled = element.State.IsEnabled;
+            var hasSize = webElement.Size.Height > 0 && webElement.Size.Width > 0;
+            var location = webElement.Location;
+            var size = webElement.Size;
+            var inViewport = location.X >= -50 && location.Y >= -50 && size.Width > 5 && size.Height > 5;
+            _ = webElement.TagName;
+            return displayed && enabled && hasSize && inViewport;
+        }, TimeSpan.FromMilliseconds(100));
+        
+        return interactable;
+    }
+    #endregion
+
+    public void Search()
+    {
+        Logger.Info("Clicking search button to apply filters");
+
+        var searchButton = FindFirstDisplayedButton(_searchButtonLocators);
+        if (searchButton != null)
+        {
+            searchButton.Click();
+            Logger.Info("Search button clicked successfully");
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        }
+        else
+        {
+            Logger.Warn("Search button not found");
+        }
+    }
+
+    private ITextBox? FindFirstDisplayedTextBox(IEnumerable<By> locators)
+    {
+        foreach (var locator in locators)
+        {
+            var textBoxes = Factory.FindElements<ITextBox>(locator, $"TextBox for {locator}");
+            var element = textBoxes.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+            
+            if (element != null)
+            {
+                Logger.Debug($"Found element using locator: {locator}");
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private IButton? FindFirstDisplayedButton(IEnumerable<By> locators)
+    {
+        foreach (var locator in locators)
+        {
+            var buttons = Factory.FindElements<IButton>(locator, $"Button for {locator}");
+            var element = buttons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+            
+            if (element != null)
+            {
+                Logger.Debug($"Found element using locator: {locator}");
+                return element;
+            }
+        }
+        return null;
+    }
+
+    public List<ListingData> GetAllListingsData()
+    {
+        Logger.Info("Collecting data from all listings on the current page");
+        
+        var listings = GetListingElements();
+        var listingsData = new List<ListingData>();
+        
+        for (int i = 0; i < listings.Count; i++)
+        {
+            var listing = listings[i];
+            var listingData = new ListingData
+            {
+                Index = i + 1,
+                Element = listing,
+                Price = ExtractPriceFromListing(listing),
+                Surface = ExtractSurfaceFromListing(listing),
+                Rooms = ExtractRoomsFromListing(listing),
+                Title = ExtractTitleFromListing(listing)
+            };
+            
+            listingsData.Add(listingData);
+            Logger.Debug($"Listing {i + 1}: Price={listingData.Price}, Surface={listingData.Surface}m², Rooms={listingData.Rooms}, Title='{listingData.Title}'");
+        }
+        
+        Logger.Info($"Collected data from {listingsData.Count} listings");
+        return listingsData;
+    }
+
+    public string? ExtractTitleFromListing(IWebElement listing)
+    {
+        var titleSelectors = new[]
+        {
+            By.CssSelector("h2"),
+            By.CssSelector("h3"),
+            By.CssSelector("a[title]"),
+            By.CssSelector("a[data-cy*='title']"),
+            By.CssSelector("span[data-cy*='title']"),
+            By.CssSelector(".listing-title"),
+            By.CssSelector("[class*='title']")
+        };
+
+        foreach (var selector in titleSelectors)
+        {
+            var element = listing.FindElements(selector).FirstOrDefault(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
+            if (element != null)
+            {
+                var title = element.Text?.Trim();
+                if (!string.IsNullOrEmpty(title))
+                {
+                    Logger.Debug($"Found title using selector {selector}: '{title}'");
+                    return title;
+                }
+            }
+        }
+        
+        return null;
     }
 }

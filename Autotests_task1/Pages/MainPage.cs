@@ -1,70 +1,28 @@
 using Aquality.Selenium.Browsers;
-using Aquality.Selenium.Elements;
 using Aquality.Selenium.Elements.Interfaces;
-using NLog;
+using Aquality.Selenium.Elements;
+using Aquality.Selenium.Core.Elements;
 using OpenQA.Selenium;
+using Aquality.Selenium.Core.Logging;
+using Autotests_task1.Helpers;
 
 namespace Autotests_task1.Pages;
 
 public class MainPage : BasePage
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-
-    private const string SiteUrl = "https://www.otodom.pl/";
-    private static readonly TimeSpan DefaultUiWait = TimeSpan.FromSeconds(10);
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
+    private static readonly string SiteUrl = ConfigHelper.GetSiteUrl();
 
     public MainPage() : base(By.CssSelector("body"), "Main Page") { }
 
-    #region Static/Direct Elements
-    private IButton AcceptCookiesBtn => ElementFactory.GetButton(By.Id("onetrust-accept-btn-handler"), "Cookies Accept");
-    #endregion
+    private readonly By _locationButton  = By.XPath("//input[contains(@data-cy,'search.form.location')]");
+    private readonly By _locationInput  = By.XPath("//input[@id='location-search-input']");
+    private readonly By _priceFromInput = By.CssSelector("input[data-cy='search-form--field--priceMin']");
+    private readonly By _priceToInput   = By.CssSelector("input[data-cy='search-form--field--priceMax']");
+    private readonly By _searchButton   = By.CssSelector("button[id='search-form-submit']");
+    private readonly By _loginButton    = By.XPath("//div[@data-sentry-element='NexusNavUserMenuWrapper']//button[@data-cy='navbar-my-account-button']");
 
-    #region Dynamic Locator Pools with Extended Search Button Options
-    private readonly IReadOnlyCollection<By> _locationLocators = new List<By>
-    {
-        By.CssSelector("input[data-cy='search.form.location.button']"), // new explicit preferred locator
-        By.CssSelector("input[name='location']"),
-        By.CssSelector("input[placeholder*='Lokal']"),
-        By.CssSelector("input[placeholder*='lokal']"),
-        By.CssSelector("input[placeholder*='Miejsc']"),
-        By.CssSelector("input[aria-label*='Lokal']"),
-        By.XPath("//input[contains(translate(@placeholder,'LOKALM','lokalm'),'lokal') or contains(translate(@placeholder,'MIEJSC','miejsc'),'miejsc')]")
-    };
-
-    private readonly IReadOnlyCollection<By> _priceMinLocators = new List<By>
-    {
-        By.CssSelector("input[name='priceMin']"),
-        By.CssSelector("input[id*='priceFrom']"),
-        By.XPath("//input[contains(@placeholder,'od') and (contains(@placeholder,'Cena') or contains(@aria-label,'Cena'))]")
-    };
-
-    private readonly IReadOnlyCollection<By> _priceMaxLocators = new List<By>
-    {
-        By.CssSelector("input[name='priceMax']"),
-        By.CssSelector("input[id*='priceTo']"),
-        By.XPath("//input[contains(@placeholder,'do') and (contains(@placeholder,'Cena') or contains(@aria-label,'Cena'))]")
-    };
-
-    private readonly IReadOnlyCollection<By> _searchButtonLocators = new List<By>
-    {
-        By.Id("search-form-submit"),
-        By.CssSelector("button[id='search-form-submit']"),
-        By.CssSelector("button[type='submit']"),
-        By.CssSelector("button[data-cy='search-button']"),
-        By.CssSelector("button[data-cy='homepage.search.submit.button']"), // Additional potential locator
-        By.CssSelector("form button[type='submit']"), // Generic form submit
-        By.XPath("//button[contains(.,'Szukaj') or contains(.,'Search')]"),
-        By.XPath("//button[contains(@class,'search') or contains(@class,'submit')]") // Class-based fallback
-    };
-
-    private readonly IReadOnlyCollection<By> _loginLocators = new List<By>
-    {
-        By.CssSelector("a[data-cy='header-login-button']"),
-        By.XPath("//a[contains(normalize-space(.),'Moje konto')]|//button[contains(.,'Moje konto') or contains(.,'Zaloguj') or contains(.,'Log in')]")
-    };
-    #endregion
-
-    #region Navigation & Page State
     public void Open()
     {
         Logger.Info($"Opening main page: {SiteUrl}");
@@ -72,202 +30,201 @@ public class MainPage : BasePage
         AqualityServices.Browser.WaitForPageToLoad();
     }
 
-    public bool WaitUntilLoaded()
+    public void AcceptCookiesIfPresent()
     {
-        Logger.Debug("Waiting for main page root to be displayed");
-        return State.WaitForDisplayed(DefaultUiWait);
-    }
-    #endregion
-
-    #region Helpers
-    private static IWebElement? TryFindFirstDisplayed(IWebDriver driver, IEnumerable<By> locators)
-    {
-        foreach (var by in locators)
+        var cookieButtons = Factory.FindElements<IButton>(By.Id("onetrust-accept-btn-handler"), "Cookie accept buttons");
+        var btn = cookieButtons.FirstOrDefault(b => b.State.IsDisplayed && b.State.IsEnabled);
+        
+        if (btn == null) return;
+        
+        try
         {
-            try
-            {
-                var elements = driver.FindElements(by);
-                var element = elements.FirstOrDefault(e => e.Displayed && e.Enabled);
-                if (element != null) 
-                {
-                    Logger.Debug($"Found element using locator: {by}");
-                    return element;
-                }
-            }
-            catch (StaleElementReferenceException) 
-            { 
-                Logger.Debug($"Stale element with locator: {by}");
-            }
-            catch (NoSuchElementException) 
-            { 
-                Logger.Debug($"No element found with locator: {by}");
-            }
+            btn.Click();
+            Logger.Info("Cookie consent accepted.");
         }
-        return null;
-    }
-
-    private static bool SafeClick(IWebDriver driver, IWebElement element)
-    {
-        try { element.Click(); return true; }
         catch (Exception ex)
         {
+            Logger.Warn($"Standard click failed for cookie button: {ex.Message}");
             try
             {
-                Logger.Debug(ex, "Standard click failed, trying JS click");
-                ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].click();", element);
-                return true;
+                btn.JsActions.Click();
+                Logger.Info("Cookie consent accepted via JS.");
             }
             catch (Exception jsEx)
             {
-                Logger.Warn(jsEx, "JS click also failed");
-                return false;
+                Logger.Error($"Failed to accept cookies: {jsEx.Message}");
             }
         }
     }
-    #endregion
 
-    #region Cookies
-    public void AcceptCookiesIfPresent()
+    public bool OpenLogin()
     {
-        Logger.Debug("Checking cookies popup");
-        if (AcceptCookiesBtn.State.WaitForDisplayed(TimeSpan.FromSeconds(5)))
+        var login = FindFirstDisplayedButton(_loginButton);
+        if (login == null)
         {
-            Logger.Info("Cookies popup detected. Accepting.");
-            AcceptCookiesBtn.Click();
-        }
-        else
-        {
-            Logger.Debug("No cookies popup displayed.");
-        }
-    }
-    #endregion
-
-    #region Filters
-    public bool SetLocation(string location)
-    {
-        var driver = AqualityServices.Browser.Driver;
-        var input = TryFindFirstDisplayed(driver, _locationLocators);
-        if (input == null)
-        {
-            Logger.Warn("Location input not found with any known locator.");
+            Logger.Error("Login button not found");
             return false;
         }
-        Logger.Info($"Setting location: {location}");
-        input.Clear();
-        input.SendKeys(location);
+        login.Click();
         return true;
     }
 
-    // Explicit location setter using data-cy attribute and pressing Enter to confirm suggestion.
-    public bool SetLocationWithEnter(string location)
+    public bool SetLocation(string location)
     {
-        var driver = AqualityServices.Browser.Driver;
-        var input = driver.FindElements(By.CssSelector("input[data-cy='search.form.location.button']"))
-            .FirstOrDefault(e => e.Displayed && e.Enabled);
+        var input = FindFirstDisplayedTextBox(_locationButton);
         if (input == null)
         {
-            Logger.Warn("Explicit location input with data-cy not found; falling back to generic SetLocation");
-            return SetLocation(location);
+            Logger.Error("Location input not found");
+            return false;
         }
-        Logger.Info($"Setting location (ENTER confirm): {location}");
-        try
+        
+        input.Click();
+        var input2 = FindFirstDisplayedTextBox(_locationInput);
+        if (input2 == null)
         {
-            if (!string.IsNullOrEmpty(input.GetAttribute("value"))) input.Clear();
-            input.SendKeys(location);
-            // Wait for suggestions to appear
-            Thread.Sleep(1000);
-            input.SendKeys(Keys.Enter);
-            // Wait until value reflects selection (best-effort)
-            AqualityServices.ConditionalWait.WaitFor(() =>
-                (input.GetAttribute("value") ?? string.Empty).Contains(location, StringComparison.OrdinalIgnoreCase),
-                timeout: TimeSpan.FromSeconds(5));
-            return true;
+            Logger.Error("Location search input not found");
+            return false;
         }
-        catch (Exception ex)
+        
+        input2.SendKeys(location);
+
+        bool suggestionAppeared = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            Logger.Warn(ex, "Failed to set location with ENTER, fallback to SetLocation");
-            return SetLocation(location);
+            var suggestions = Factory.FindElements<ILabel>(
+                By.CssSelector("div[role='listitem']"),
+                "Location suggestions");
+
+            return suggestions.Any(e => e.State.IsDisplayed);
+        }, TimeSpan.FromSeconds(3));
+
+        if (!suggestionAppeared)
+        {
+            Logger.Warn("No location suggestions appeared within timeout");
         }
+        else
+        {
+            Logger.Info("Location suggestions detected");
+        }
+
+        input2.SendKeys(Keys.Enter);
+
+        var logoButtons = Factory.FindElements<IButton>(By.XPath("//a[@data-sentry-element='Logo']"), "Logo buttons");
+        var logoElement = logoButtons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+        
+        if (logoElement != null)
+        {
+            Logger.Info("Clicking on Otodom logo to stabilize form");
+            logoElement.Click();
+            Logger.Info("Successfully clicked on logo");
+            AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        }
+                  
+        var formReady = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var priceMin = FindFirstDisplayedTextBox(_priceFromInput);
+            return priceMin != null && IsElementFullyInteractable(priceMin);
+        }, TimeSpan.FromSeconds(5));
+        
+        Logger.Debug($"Form ready after location: {formReady}");
+        return true;
     }
 
     public bool SetPriceRange(int min, int max)
     {
-        var driver = AqualityServices.Browser.Driver;
-        var minBox = TryFindFirstDisplayed(driver, _priceMinLocators);
-        var maxBox = TryFindFirstDisplayed(driver, _priceMaxLocators);
-        if (minBox == null || maxBox == null)
+        Logger.Info($"Setting price range: {min}-{max}");
+        
+        var inputsReady = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            Logger.Warn("Price range inputs not both found. Skipping explicit price filter.");
-            return false;
+            var from = FindFirstDisplayedTextBox(_priceFromInput);
+            var to = FindFirstDisplayedTextBox(_priceToInput);
+            
+            if (from == null || to == null) return false;
+            if (!IsElementFullyInteractable(from) || !IsElementFullyInteractable(to)) return false;
+            
+            from.Click();
+            from.ClearAndType(min.ToString());
+            
+            to.Click();
+            to.ClearAndType(max.ToString());
+            
+            return true;
+            
+        }, TimeSpan.FromSeconds(10));
+        
+        if (inputsReady)
+        {
+            Logger.Info("Price range set successfully");
+            return true;
         }
-        Logger.Info($"Setting price range: {min} - {max}");
-        minBox.Clear();
-        minBox.SendKeys(min.ToString());
-        maxBox.Clear();
-        maxBox.SendKeys(max.ToString());
-        return true;
+        
+        Logger.Error("Failed to set price range");
+        return false;
     }
 
     public void SetLocationAndPriceFilters(string location, int minPrice, int maxPrice)
     {
-        Logger.Info($"Applying filters: location='{location}', price {minPrice}-{maxPrice}");
-        var locSet = SetLocationWithEnter(location); // use explicit method for reliability
-        var priceSet = SetPriceRange(minPrice, maxPrice);
-        Logger.Debug($"Location set: {locSet}, Price set: {priceSet}");
+        var locOk = SetLocation(location);
+        var priceOk = SetPriceRange(minPrice, maxPrice);
+        Logger.Debug($"Location set: {locOk}; Price set: {priceOk}");
     }
-    #endregion
 
-    #region Actions
-    public bool ClickSearch()
+    public bool ClickSearchButton()
     {
-        var driver = AqualityServices.Browser.Driver;
-        
-        // Wait a bit for any dynamic content to settle
-        Thread.Sleep(1000);
-        
-        var btn = TryFindFirstDisplayed(driver, _searchButtonLocators);
-        if (btn == null)
+        Logger.Info("Clicking search button");
+
+        var clickSucceeded = AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            Logger.Error("Search button not found using provided locators. Logging all buttons on page:");
-            try
+            var btn = FindFirstDisplayedButton(_searchButton);
+            if (btn == null)
             {
-                var allButtons = driver.FindElements(By.TagName("button"));
-                foreach (var button in allButtons.Take(10)) // Log first 10 buttons
-                {
-                    try
-                    {
-                        var id = button.GetAttribute("id") ?? "no-id";
-                        var classes = button.GetAttribute("class") ?? "no-class";
-                        var text = button.Text ?? "no-text";
-                        var type = button.GetAttribute("type") ?? "no-type";
-                        Logger.Info($"Button found: id='{id}', class='{classes}', text='{text}', type='{type}'");
-                    }
-                    catch { }
-                }
+                Logger.Error("Search button not found");
+                return false;
             }
-            catch (Exception ex)
+
+            if (btn.State.IsDisplayed && btn.State.IsEnabled)
             {
-                Logger.Error(ex, "Failed to enumerate buttons");
+                btn.Click();
+                return true;
             }
+
             return false;
+        }, TimeSpan.FromSeconds(5));
+
+        if (clickSucceeded)
+        {
+            Logger.Info("Search button clicked successfully");
+            return true;
         }
-        Logger.Info("Found and clicking Search button");
-        return SafeClick(driver, btn);
+
+        Logger.Error("Failed to click search button after waiting 5 seconds");
+        return false;
     }
-
-    public bool Search() => ClickSearch();
-
-    public bool OpenLogin()
+    
+    private ITextBox? FindFirstDisplayedTextBox(By locator)
     {
-        var driver = AqualityServices.Browser.Driver;
-        var el = TryFindFirstDisplayed(driver, _loginLocators);
-        if (el == null)
-        {
-            Logger.Error("Login link/button not found.");
-            return false;
-        }
-        Logger.Info("Opening login dialog/page");
-        return SafeClick(driver, el);
+        var textBoxes = Factory.FindElements<ITextBox>(locator, $"TextBox for {locator}");
+        return textBoxes.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
     }
-    #endregion
+
+    private IButton? FindFirstDisplayedButton(By locator)
+    {
+        var buttons = Factory.FindElements<IButton>(locator, $"Button for {locator}");
+        return buttons.FirstOrDefault(e => e.State.IsDisplayed && e.State.IsEnabled);
+    }
+
+    private bool IsElementFullyInteractable(IElement element)
+    {
+        if (element == null) return false;
+        
+        return AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            var webElement = element.GetElement();
+            return element.State.IsDisplayed && 
+                   element.State.IsEnabled &&
+                   webElement.Size.Width > 5 && 
+                   webElement.Size.Height > 5 &&
+                   webElement.Location.X >= -50 && 
+                   webElement.Location.Y >= -50;
+        }, TimeSpan.FromMilliseconds(200));
+    }
 }

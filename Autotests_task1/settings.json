@@ -11,7 +11,17 @@
   },
   "chrome": {
     "args": [
-      "--start-maximized"
-    ]
+      "--start-maximized",
+      "--disable-notifications",
+      "--disable-popup-blocking",
+      "--disable-infobars"
+    ],
+    "prefs": {
+      "profile.default_content_setting_values.notifications": 2,
+      "profile.default_content_setting_values.geolocation": 2,
+      "profile.default_content_setting_values.media_stream": 2,
+      "profile.default_content_setting_values.media_stream_mic": 2,
+      "profile.default_content_setting_values.media_stream_camera": 2
+    }
   }
 }

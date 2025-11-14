@@ -1,8 +1,11 @@
 using Aquality.Selenium.Browsers;
+using Aquality.Selenium.Elements.Interfaces;
+using Aquality.Selenium.Elements;
 using FluentAssertions;
 using Reqnroll;
 using Autotests_task1.Pages;
-using NLog;
+using Autotests_task1.Helpers;
+using Aquality.Selenium.Core.Logging;
 using OpenQA.Selenium;
 
 namespace Autotests_task1.Steps;
@@ -10,36 +13,30 @@ namespace Autotests_task1.Steps;
 [Binding]
 public class CommonSteps
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger Logger = AqualityServices.Get<Logger>();
+    private static readonly IElementFactory Factory = AqualityServices.Get<IElementFactory>();
+    private static readonly string BaseUrl = ConfigHelper.GetBaseUrl();
+    private static readonly string LoginUrl = ConfigHelper.GetLoginUrl();
 
     private readonly MainPage _mainPage = new();
     private readonly LoginPage _loginPage = new();
 
-    // NOTE: Credentials supplied explicitly per user request. In real projects use secure secrets storage.
-    private const string UserEmail = "vopav47202@noidem.com";
-    private const string UserPassword = ":6357A3pVLJ*";
+    private static string UserEmail => ConfigHelper.GetUsername();
+    private static string UserPassword => ConfigHelper.GetPassword();
 
     [When("I open Otodom main page")]
     [Given("I open Otodom main page")]
     public void OpenMainPage()
     {
         Logger.Info("Opening Otodom main page");
-        if (AqualityServices.IsBrowserStarted)
-        {
-            AqualityServices.Browser.Driver.Manage().Cookies.DeleteAllCookies();
-        }
         _mainPage.Open();
-        _mainPage.WaitUntilLoaded().Should().BeTrue("Main page should load successfully");
+        _mainPage.State.WaitForDisplayed(TimeSpan.FromSeconds(10))
+            .Should().BeTrue("Main page should load successfully");
         
-        // Give page time to fully render
         AqualityServices.ConditionalWait.WaitFor(() =>
         {
-            try
-            {
-                var url = AqualityServices.Browser.CurrentUrl;
-                return url.Contains("otodom.pl");
-            }
-            catch { return false; }
+            var url = AqualityServices.Browser.CurrentUrl;
+            return url.Contains(new Uri(BaseUrl).Host);
         }, timeout: TimeSpan.FromSeconds(10));
         
         Logger.Info($"Main page loaded: {AqualityServices.Browser.CurrentUrl}");
@@ -51,67 +48,69 @@ public class CommonSteps
     {
         Logger.Info("Executing step: I accept cookies if popup appears");
         _mainPage.AcceptCookiesIfPresent();
-        // Small wait after accepting cookies to let page settle
-        Thread.Sleep(1000);
+        
+        Logger.Info("Waiting for page to stabilize after cookie acceptance...");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
     }
 
     [When("I authorize user")]
     public void AuthorizeUser()
     {
-        Logger.Info("Attempting user authorization (best-effort)");
-        var opened = _mainPage.OpenLogin();
-        if (!opened)
-        {
-            Logger.Warn("Login trigger not found. Continuing without login.");
-            return; // proceed unauthenticated
-        }
-
-        // Wait for either redirect to login domain or presence of login form fields
-        bool onLogin = AqualityServices.ConditionalWait.WaitFor(() =>
-            AqualityServices.Browser.CurrentUrl.Contains("login.otodom.pl") ||
-            AqualityServices.Browser.Driver.FindElements(By.Id("username")).Any(), timeout: TimeSpan.FromSeconds(10));
-
-        if (!onLogin)
-        {
-            Logger.Warn("Did not reach login page/form. Continuing without authenticating.");
-            return;
-        }
-
-        // If already authenticated (redirected back quickly) just exit
-        if (AqualityServices.Browser.CurrentUrl.Contains("www.otodom.pl") && !AqualityServices.Browser.CurrentUrl.Contains("login.otodom.pl"))
-        {
-            Logger.Info("Already authenticated (or auto-redirected). Skipping explicit login.");
-            return;
-        }
-
-        if (!AqualityServices.Browser.CurrentUrl.Contains("login.otodom.pl"))
-        {
-            Logger.Info("Login form detected inside current page context.");
-        }
-
-        try
-        {
-            _loginPage.Login(UserEmail, UserPassword);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Login submission failed. Proceeding without asserting authentication.");
-            return;
-        }
-
-        // Post-login wait (best-effort) but no hard assertion
-        AqualityServices.ConditionalWait.WaitFor(() =>
-            AqualityServices.Browser.CurrentUrl.Contains("www.otodom.pl") && !AqualityServices.Browser.CurrentUrl.Contains("login.otodom.pl"),
-            timeout: TimeSpan.FromSeconds(15));
-        Logger.Info("Authorization step finished (best-effort).");
+        Logger.Info("Attempting user authorization (reading credentials from configuration)");
         
-        // Wait for page to fully load after login
-        Thread.Sleep(2000);
+        var username = UserEmail;
+        var password = UserPassword;
+        
+        var maskedUsername = username.Contains('@') 
+            ? $"{username.Substring(0, Math.Min(2, username.IndexOf('@')))}{new string('*', Math.Max(0, username.IndexOf('@') - 2))}@{username.Split('@')[1]}"
+            : "***";
+        Logger.Info($"Credentials loaded successfully for user: {maskedUsername}");
+        Logger.Info("Waiting for page to stabilize before opening login...");
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(1));
+        
+        var opened = _mainPage.OpenLogin();
+        opened.Should().BeTrue("Login button must be present after cookie acceptance. Check if cookies were properly closed and page is stable.");
+        
+        bool onLogin = AqualityServices.ConditionalWait.WaitFor(() =>
+        {
+            if (AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host))
+                return true;
+            
+            var usernameFields = Factory.FindElements<ITextBox>(By.Id("username"), "Username fields");
+            return usernameFields.Any(f => f.State.IsDisplayed);
+        }, timeout: TimeSpan.FromSeconds(10));
+
+        onLogin.Should().BeTrue($"Login page should load within 10 seconds. Current URL: {AqualityServices.Browser.CurrentUrl}");
+        
+        Logger.Info("Login page detected");
+
+        if (AqualityServices.Browser.CurrentUrl.Contains(new Uri(BaseUrl).Host) && 
+            !AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host))
+        {
+            Logger.Info("Already authenticated. Skipping explicit login.");
+            return;
+        }
+
+
+        Logger.Info("Submitting login credentials from configuration");
+        _loginPage.Login(UserEmail, UserPassword);
+        Logger.Info("Login credentials submitted successfully");
+
+        var loggedIn = AqualityServices.ConditionalWait.WaitFor(() =>
+            AqualityServices.Browser.CurrentUrl.Contains(new Uri(BaseUrl).Host) && 
+            !AqualityServices.Browser.CurrentUrl.Contains(new Uri(LoginUrl).Host),
+            timeout: TimeSpan.FromSeconds(15));
+        
+        loggedIn.Should().BeTrue($"User should be redirected to main page after login. Current URL: {AqualityServices.Browser.CurrentUrl}");
+        
+        Logger.Info("Authorization completed successfully.");
+        
+        AqualityServices.ConditionalWait.WaitFor(() => false, TimeSpan.FromSeconds(2));
     }
 
     [Then("Main page should be opened")]
     public void MainPageShouldBeOpened()
     {
-        AqualityServices.Browser.CurrentUrl.Should().Contain("otodom.pl");
+        AqualityServices.Browser.CurrentUrl.Should().Contain(new Uri(BaseUrl).Host);
     }
 }
